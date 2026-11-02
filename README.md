@@ -20,13 +20,15 @@ and `preview.png`. Neither folder is installed by Herdr automatically.
 Tell your agent:
 
 ```
-Read ~/.config/herdr-app/AGENTS.md, then add this layout: <repo>/along
+Read ~/.config/herdr-app/AGENTS.md, then add this layout:
+https://github.com/chenweil/herdr-along/tree/main/along
 ```
 
 or, for the panels alone:
 
 ```
-Read ~/.config/herdr-app/AGENTS.md, then add this mod: <repo>/along-panels
+Read ~/.config/herdr-app/AGENTS.md, then add this mod:
+https://github.com/chenweil/herdr-along/tree/main/along-panels
 ```
 
 By hand: copy `along/layouts/along.json` into `~/.config/herdr-app/layouts/`
