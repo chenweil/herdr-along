@@ -54,8 +54,6 @@ Nothing here uses the network.
 
 ## License
 
-Along is MIT licensed; see [LICENSE](LICENSE). `along-files` and
-`along-changes` are copies of Herdr's shipped `files` and `changes` panels,
-which are Apache 2.0 licensed; see [NOTICE](NOTICE) for attribution. The rest
-(including `along-menu`, `along-machines` and both layouts) is original MIT
-work.
+Along is Apache-2.0 licensed; see [LICENSE](LICENSE). `along-files` and
+`along-changes` are modified copies of Herdr's shipped `files` and `changes`
+panels, which are Apache 2.0 licensed; see [NOTICE](NOTICE) for attribution.
