@@ -2,3 +2,6 @@
 jsconfig.json
 gpui-kit.d.ts
 herdr.d.ts
+
+# macOS
+.DS_Store
