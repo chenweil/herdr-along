@@ -4,6 +4,8 @@ The Files and Changes panels from Along, with a right-click menu that copies a f
 
 ![Along panels](preview.png)
 
+Version 0.3.0. See [CHANGELOG.md](CHANGELOG.md) for what changed.
+
 This file is the brief: enough to build Along panels from an empty folder. The
 files next to it are one build of it. If they don't work on your Herdr, or you
 want it different, build it again from here.

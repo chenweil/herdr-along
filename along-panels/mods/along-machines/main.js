@@ -1,16 +1,42 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { closeOverlay, props, theme, exec } from "herdr";
+import * as fs from "fs/promises";
+import { appHome, closeOverlay, props, setShared, shared, theme, exec } from "herdr";
 
 const STORE = "along.machines.disabled";
 
 function saved() {
-  try { return JSON.parse(localStorage.getItem(STORE) ?? "{}"); }
-  catch { return {}; }
+  const value = shared(STORE);
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 function save(value) {
-  localStorage.setItem(STORE, JSON.stringify(value));
+  setShared(STORE, value);
+}
+
+function updateSaved(name, machine) {
+  const value = saved();
+  if (machine) value[name] = machine;
+  else delete value[name];
+  save(value);
+}
+
+async function migrateLegacy() {
+  if (shared(STORE) != null) return;
+  const value = {};
+  try {
+    const dir = `${appHome()}/data/along-machines`;
+    const files = await fs.readdir(dir);
+    for (const file of files.filter(name => /^store.*\.json$/.test(name))) {
+      try {
+        const outer = JSON.parse(await fs.readFile(`${dir}/${file}`, "utf8"));
+        const profiles = JSON.parse(outer[STORE] ?? "{}");
+        if (profiles && typeof profiles === "object" && !Array.isArray(profiles)) Object.assign(value, profiles);
+      } catch {}
+    }
+  } catch {}
+  if (shared(STORE) != null) return;
+  save(value);
 }
 
 function addArgs(machine) {
@@ -45,7 +71,7 @@ export default class AlongMachines extends View {
 
   refresh(cx) {
     cx.spawn(async cx => {
-      try { this.machines = await this.list(); this.error = null; }
+      try { await migrateLegacy(); this.machines = await this.list(); this.error = null; }
       catch (e) { this.error = String(e); }
       cx.notify();
     });
@@ -54,20 +80,18 @@ export default class AlongMachines extends View {
   async toggle(machine, cx) {
     if (this.busy.has(machine.name)) return;
     this.busy.add(machine.name); this.error = null;
-    const disabled = saved();
     try {
       if (machine.enabled) {
-        disabled[machine.name] = machine;
-        save(disabled);
+        updateSaved(machine.name, machine);
         const result = await exec("hc", ["machine", "rm", "--json", machine.name]);
         if (result.code !== 0) {
-          delete disabled[machine.name]; save(disabled);
+          updateSaved(machine.name, null);
           throw new Error((result.stderr || result.stdout).trim() || `Cannot disable ${machine.name}`);
         }
       } else {
         const result = await exec("hc", addArgs(machine));
         if (result.code !== 0) throw new Error((result.stderr || result.stdout).trim() || `Cannot enable ${machine.name}`);
-        delete disabled[machine.name]; save(disabled);
+        updateSaved(machine.name, null);
       }
       this.machines = await this.list();
     } catch (e) { this.error = String(e); }
