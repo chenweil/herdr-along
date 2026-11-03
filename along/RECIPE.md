@@ -71,9 +71,9 @@ have a right-click menu, and both panel headers carry a Machines button.
   file's diff. Clicking a row opens its diff, clicking it again closes it.
 - "Machines" opens the dialog from either panel header. It reads the
   machines herdr-core knows with `hc machine ls --json`. "Disable" removes the
-  machine with `hc machine rm` and keeps its profile in the mod's local
-  storage; "Enable" adds it back with `hc machine add` and the saved target
-  and session. The row shows "Working…" while the command runs.
+  machine with `hc machine rm` and keeps its profile in shared state; "Enable"
+  adds it back with `hc machine add` and the saved target and session. The row
+  shows "Working…" while the command runs.
 - Nothing animates, and Along shows no agent status: the spaces and agents
   lists are the shipped ones.
 
@@ -100,7 +100,8 @@ have a right-click menu, and both panel headers carry a Machines button.
     with `closeOverlay`.
   - `along-machines/` — the dialog. Reads with `exec("hc", ["machine", "ls",
     "--json"])`, writes with `hc machine rm` and `hc machine add`, and keeps
-    disabled profiles in `localStorage` under `along.machines.disabled`.
+    disabled profiles in shared state under `along.machines.disabled`. It
+    migrates profiles from older per-overlay stores on first open.
 - **Data:** `spaces()`, `panes()` and `focused()` for the folder and the
   remote machine, `theme()` for every color, `settings()` for the preview
   font, `window()` for the platform.
