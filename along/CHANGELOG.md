@@ -9,11 +9,12 @@ Earlier builds did not carry a version number; this log starts at 0.3.0.
   pane) and opens a draggable floating window that holds it, topped by the
   new along-float bar. "↙ send back" puts the terminal back into the
   layout — into the space and tab it was floated from, at its old spot:
-  floating probes the pane's neighbors with `pane.go` and send back splits
-  off the nearest surviving one in the recorded direction (left neighbor →
-  split right of it, upper neighbor → split below it; with only a right or
-  lower neighbor it lands mirrored, still adjacent), or, when that tab is
-  gone, a new tab in that space. "✕" closes
+  floating awaits `pane.go` probes in all four directions and records the
+  neighbors; send back splits off the nearest surviving one in the recorded
+  direction (left neighbor → split right of it, upper neighbor → split below
+  it; with only a right or lower neighbor it splits mirrored and then
+  `pane.swap`s back to the old side once the kept pane exists), or, when
+  that tab is gone, a new tab in that space. "✕" closes
   the window and leaves the terminal parked. Floats remember where they
   were dropped and reopen with the layout.
 
