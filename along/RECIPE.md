@@ -95,18 +95,20 @@ Files and Changes.
 - **Six mods**, all `"place": "none"` so only the layout decides where they
   show:
   - `along-pane/` — the shipped `pane` header mod plus a Float button: it
-    parks the pane's terminal with `terminal.park` (the terminal keeps
-    running without a pane) and opens a `kind: "window"` overlay whose
-    layout holds the along-float bar and a `{ terminal }` block. The
-    window's `key` (`along-float-<terminal>`) remembers where it was
-    dropped and reopens it there.
+    probes the pane's neighbors with `pane.focus` + `pane.go` (left, up,
+    right, down), records them with the source space and tab in
+    `shared("along.floats.origins")`, then parks the pane's terminal with
+    `terminal.park` (the terminal keeps running without a pane) and opens a
+    `kind: "window"` overlay whose layout holds the along-float bar and a
+    `{ terminal }` block. The window's `key` (`along-float-<terminal>`)
+    remembers where it was dropped and reopens it there.
   - `along-float/` — the floating window's bar, a copy of the shipped
     `peek` bar. Shows the program icon, name and agent status; "↙ send
-    back" returns the terminal to the space and tab it was floated from
-    (along-pane records it in `shared("along.floats.origins")` — the
-    terminal splits back into that tab, or opens a new tab there when the
-    tab is gone) and closes the overlay; "✕" just closes it (the terminal
-    stays parked; the agents list can bring it back).
+    back" returns the terminal to the space and tab it was floated from,
+    splitting off the nearest surviving recorded neighbor in its original
+    direction (tab gone: a new tab in that space) and closes the overlay;
+    "✕" just closes it (the terminal stays parked; the agents list can
+    bring it back).
   - `along-files/` — the shipped `files` mod plus `openOverlay`, the
     `windows`/`joiner` path helpers, a `rowMenu(path, entry)` method, an
     `.on_mouse_down("right", …)` on each row, and its own asset paths

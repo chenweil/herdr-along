@@ -7,7 +7,7 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { panes, props, run, openOverlay, theme, home, layout, spaces, shared, setShared } from "herdr";
+import { panes, props, run, openOverlay, theme, home, layout, spaces, focused, shared, setShared } from "herdr";
 
 // Match the first visible tab frame, including the active child of a stack.
 function paneFrame(node) {
@@ -59,15 +59,27 @@ export default class Pane extends View {
 
   // 把这个 pane 飘起来：park 让终端脱离布局（继续运行），
   // 再开一个可拖动的悬浮窗口装住它，顶栏是 along-float。
-  // 先记住它来自哪个 space/tab，send back 时回到原 tab。
+  // 先记住它来自哪个 space/tab，再用 pane.go 探四周邻居（焦点立即弹回），
+  // send back 时按原方位 split 回去。
   float(p) {
     const terminal = p.terminal;
     if (!terminal) return;
     const space = spaces().find((s) => (s.tabs ?? []).some((t) => t.id === p.tab));
     const tab = space?.tabs?.find((t) => t.id === p.tab);
     if (space && tab) {
-      const origins = /** @type {Record<string, {space: string, tab: string}>} */ (shared("along.floats.origins") ?? {});
-      origins[terminal] = { space: space.id, tab: tab.id };
+      run("pane.focus", { pane: p.pane });
+      const probe = (dir) => {
+        run("pane.go", { direction: dir });
+        const f = focused();
+        return f?.pane && f.pane !== p.pane && f.tab === p.tab ? f.pane : null;
+      };
+      const neighbors = {};
+      for (const dir of ["left", "up", "right", "down"]) {
+        neighbors[dir] = probe(dir);
+        run("pane.focus", { pane: p.pane });
+      }
+      const origins = /** @type {Record<string, {space: string, tab: string, neighbors: Record<string, string | null>}>} */ (shared("along.floats.origins") ?? {});
+      origins[terminal] = { space: space.id, tab: tab.id, neighbors };
       setShared("along.floats.origins", origins);
     }
     run("terminal.park", { terminal });
