@@ -87,12 +87,23 @@ Files and Changes.
   [14, 12]` and a 1px `border` divider. Its right column is `hidden: true`,
   368px, min 280, max 900, and holds a `stack` with `active: "files"` and two
   blocks, `content: { mod: "along-files" }` and `content: { mod:
-  "along-changes" }`. The tab bar points at `along-tabs` instead of the
-  shipped `tabs`. Everything else points at shipped mods:
+  "along-changes" }`. The tab bar points at `along-tabs` and the pane header
+  at `along-pane` instead of the shipped mods. Everything else points at
+  shipped mods:
   `workspace-chrome` (brand and footer), `spaces`, `agents`, `pane`,
   `workspace-status`.
-- **Five mods**, all `"place": "none"` so only the layout decides where they
+- **Six mods**, all `"place": "none"` so only the layout decides where they
   show:
+  - `along-pane/` — the shipped `pane` header mod plus a Float button: it
+    parks the pane's terminal with `terminal.park` (the terminal keeps
+    running without a pane) and opens a `kind: "window"` overlay whose
+    layout holds the along-float bar and a `{ terminal }` block. The
+    window's `key` (`along-float-<terminal>`) remembers where it was
+    dropped and reopens it there.
+  - `along-float/` — the floating window's bar, a copy of the shipped
+    `peek` bar. Shows the program icon, name and agent status; "↙ send
+    back" runs `terminal.keep` and closes the overlay, "✕" just closes it
+    (the terminal stays parked; the agents list can bring it back).
   - `along-files/` — the shipped `files` mod plus `openOverlay`, the
     `windows`/`joiner` path helpers, a `rowMenu(path, entry)` method, an
     `.on_mouse_down("right", …)` on each row, and its own asset paths
@@ -148,7 +159,8 @@ Files and Changes.
 ## Done when
 
 - `herdr-app check mods/along-files`, `mods/along-changes`, `mods/along-menu`,
-  `mods/along-machines` and `mods/along-tabs` pass.
+  `mods/along-machines`, `mods/along-tabs`, `mods/along-pane` and
+  `mods/along-float` pass.
 - Switching to `along` (`ctrl-shift-l`, or `layout.switch along`) shows the
   sidebar, the tab bar with Machines next to Files and Changes, the terminals
   and the right panel with Files in front.
@@ -161,5 +173,11 @@ Files and Changes.
   again once it closes.
 - "Machines" opens the dialog; Disable takes a machine out of `hc machine ls`
   and Enable brings it back with its target.
+- Hovering a pane header shows the Float button; clicking it removes the
+  pane from the layout and opens a draggable floating window holding the
+  same terminal, with the along-float bar on top. "↙ send back" closes the
+  window and the terminal gets a pane again; "✕" closes the window and the
+  terminal stays parked (the agents list can bring it back). A float
+  remembers where it was dropped and reopens there after a restart.
 - Switching to another layout and back keeps the panels, and Files still
   follows the focused pane's folder.
