@@ -7,7 +7,7 @@
 
 import { View, div, image, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { agents, terminals, panes, spaces, run, theme, props, closeOverlay, shared, setShared } from "herdr";
+import { agents, terminals, panes, spaces, run, theme, props, closeOverlay, shared, setShared, notify } from "herdr";
 
 const SPIN = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const WORDS = { working: "working", blocked: "needs you", done: "finished", idle: "idle" };
@@ -56,68 +56,79 @@ export default class Float extends View {
     if (!terminal) return;
     this.backing = true;
     cx.spawn(async (task) => {
-      const settle = async (pred, tries = 12) => {
-        for (let i = 0; i < tries; i++) {
-          await task.sleep(25);
-          const f = focused();
-          if (pred(f)) return f;
-        }
-        return null;
-      };
-      const home = panes().some((p) => p.terminal === terminal);
-      if (home) {
-        run("pane.focus", { terminal });
-        this.done(terminal, overlay);
-        return;
-      }
-      const origins = /** @type {Record<string, {space: string, tab: string, neighbors: Record<string, string | null>}>} */ (shared("along.floats.origins") ?? {});
-      const origin = origins[terminal];
-      const space = origin && spaces().find((s) => s.id === origin.space);
-      const tab = space?.tabs?.find((t) => t.id === origin.tab);
-      if (!space) {
-        run("terminal.keep", { terminal });
-        this.done(terminal, overlay);
-        return;
-      }
-      run("space.select", { id: space.id });
-      if (!tab) {
-        run("terminal.keep", { terminal, place: "tab" });
-        this.done(terminal, overlay);
-        return;
-      }
-      run("tab.select", { id: tab.id });
-      await settle((f) => f?.tab === tab.id);
-      const here = new Set(panes().filter((x) => x.tab === tab.id).map((x) => x.pane));
-      if (here.size === 0) {
-        run("terminal.keep", { terminal, place: "tab" });
-        this.done(terminal, overlay);
-        return;
-      }
-      const plan = [["left", "right", null], ["up", "down", null], ["right", "right", "left"], ["down", "down", "up"]];
-      let handled = false;
-      for (const [side, place, swapBack] of plan) {
-        const neighbor = origin?.neighbors?.[side];
-        if (!neighbor || !here.has(neighbor)) continue;
-        run("pane.focus", { pane: neighbor });
-        await settle((f) => f?.pane === neighbor);
-        run("terminal.keep", { terminal, place });
-        if (swapBack) {
-          // keep 在后台完成：等终端拿到新 pane，再 swap 换回原侧。
-          for (let i = 0; i < 20 && !panes().some((x) => x.terminal === terminal); i++) {
-            await task.sleep(100);
+      try {
+        const settle = async (pred, tries = 12) => {
+          for (let i = 0; i < tries; i++) {
+            await task.sleep(25);
+            const f = focused();
+            if (pred(f)) return f;
           }
-          const p2 = panes().find((x) => x.terminal === terminal);
-          if (p2) {
-            run("pane.focus", { pane: p2.pane });
-            await settle((f) => f?.pane === p2.pane);
-            run("pane.swap", { direction: swapBack });
-          }
+          return null;
+        };
+        const home = panes().some((p) => p.terminal === terminal);
+        if (home) {
+          run("pane.focus", { terminal });
+          this.done(terminal, overlay);
+          return;
         }
-        handled = true;
-        break;
+        const origins = /** @type {Record<string, {space: string, tab: string, spaceName: string, tabName: string, neighbors: Record<string, string | null>}>} */ (shared("along.floats.origins") ?? {});
+        const origin = origins[terminal];
+        // space/tab 的 id 在窗口重启后会变：先按 id 找，再按名字兑底。
+        const match = (list, id, name) =>
+          list.find((x) => x.id === id) ?? (name ? list.find((x) => x.name === name) : null);
+        const space = origin && match(spaces(), origin.space, origin.spaceName);
+        const tab = space && origin && match(space.tabs ?? [], origin.tab, origin.tabName);
+        if (!space) {
+          // 原 space 没了（记录已失效）：落到当前 space 的新 tab，并清掉记录。
+          run("terminal.keep", { terminal, place: "tab" });
+          this.done(terminal, overlay);
+          return;
+        }
+        run("space.select", { id: space.id });
+        if (!tab) {
+          run("terminal.keep", { terminal, place: "tab" });
+          this.done(terminal, overlay);
+          return;
+        }
+        run("tab.select", { id: tab.id });
+        await settle((f) => f?.tab === tab.id);
+        const here = new Set(panes().filter((x) => x.tab === tab.id).map((x) => x.pane));
+        if (here.size === 0) {
+          run("terminal.keep", { terminal, place: "tab" });
+          this.done(terminal, overlay);
+          return;
+        }
+        const plan = [["left", "right", null], ["up", "down", null], ["right", "right", "left"], ["down", "down", "up"]];
+        let handled = false;
+        for (const [side, place, swapBack] of plan) {
+          const neighbor = origin?.neighbors?.[side];
+          if (!neighbor || !here.has(neighbor)) continue;
+          run("pane.focus", { pane: neighbor });
+          await settle((f) => f?.pane === neighbor);
+          run("terminal.keep", { terminal, place });
+          if (swapBack) {
+            // keep 在后台完成：等终端拿到新 pane，再 swap 换回原侧。
+            for (let i = 0; i < 20 && !panes().some((x) => x.terminal === terminal); i++) {
+              await task.sleep(100);
+            }
+            const p2 = panes().find((x) => x.terminal === terminal);
+            if (p2) {
+              run("pane.focus", { pane: p2.pane });
+              await settle((f) => f?.pane === p2.pane);
+              run("pane.swap", { direction: swapBack });
+            }
+          }
+          handled = true;
+          break;
+        }
+        if (!handled) run("terminal.keep", { terminal, place: "right" });
+        this.done(terminal, overlay);
+      } catch (e) {
+        // 失败不清窗（还能重试），报告原因，并解锁按钮。
+        notify({ title: "Send back failed", body: String(e?.message ?? e) });
+      } finally {
+        this.backing = false;
       }
-      if (!handled) run("terminal.keep", { terminal, place: "right" });
-      this.done(terminal, overlay);
     });
   }
 

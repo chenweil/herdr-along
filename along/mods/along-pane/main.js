@@ -181,8 +181,8 @@ export default class Pane extends View {
           neighbors = null;
         }
         if (neighbors) {
-          const origins = /** @type {Record<string, {space: string, tab: string, neighbors: Record<string, string | null>}>} */ (shared("along.floats.origins") ?? {});
-          origins[terminal] = { space: space.id, tab: tab.id, neighbors };
+          const origins = /** @type {Record<string, {space: string, tab: string, spaceName: string, tabName: string, neighbors: Record<string, string | null>}>} */ (shared("along.floats.origins") ?? {});
+          origins[terminal] = { space: space.id, tab: tab.id, spaceName: space.name, tabName: tab.name, neighbors };
           setShared("along.floats.origins", origins);
         }
       }
