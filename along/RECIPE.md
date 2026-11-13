@@ -102,8 +102,11 @@ Files and Changes.
     dropped and reopens it there.
   - `along-float/` — the floating window's bar, a copy of the shipped
     `peek` bar. Shows the program icon, name and agent status; "↙ send
-    back" runs `terminal.keep` and closes the overlay, "✕" just closes it
-    (the terminal stays parked; the agents list can bring it back).
+    back" returns the terminal to the space and tab it was floated from
+    (along-pane records it in `shared("along.floats.origins")` — the
+    terminal splits back into that tab, or opens a new tab there when the
+    tab is gone) and closes the overlay; "✕" just closes it (the terminal
+    stays parked; the agents list can bring it back).
   - `along-files/` — the shipped `files` mod plus `openOverlay`, the
     `windows`/`joiner` path helpers, a `rowMenu(path, entry)` method, an
     `.on_mouse_down("right", …)` on each row, and its own asset paths

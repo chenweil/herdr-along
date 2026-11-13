@@ -7,7 +7,7 @@
 
 import { View, div, image, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { agents, terminals, panes, run, theme, props, closeOverlay } from "herdr";
+import { agents, terminals, panes, spaces, run, theme, props, closeOverlay, shared, setShared } from "herdr";
 
 const SPIN = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const WORDS = { working: "working", blocked: "needs you", done: "finished", idle: "idle" };
@@ -41,6 +41,37 @@ export default class Float extends View {
       .child(label);
   }
 
+  // 送回布局：优先回到 float 之前的原 space/tab（split 在焦点 pane 旁）；
+  // 原 tab 已不在（park 的是它唯一的 pane）就回到原 space 的新 tab。
+  back() {
+    const { terminal, overlay } = props() ?? {};
+    const home = panes().some((p) => p.terminal === terminal);
+    if (home) {
+      run("pane.focus", { terminal });
+    } else {
+      const origins = /** @type {Record<string, {space: string, tab: string}>} */ (shared("along.floats.origins") ?? {});
+      const origin = origins[terminal];
+      const space = origin && spaces().find((s) => s.id === origin.space);
+      const tab = space?.tabs?.find((t) => t.id === origin.tab);
+      if (space && tab && tab.panes > 0) {
+        run("space.select", { id: space.id });
+        run("tab.select", { id: tab.id });
+        run("terminal.keep", { terminal, place: "right" });
+      } else if (space) {
+        run("space.select", { id: space.id });
+        run("terminal.keep", { terminal, place: "tab" });
+      } else {
+        run("terminal.keep", { terminal });
+      }
+    }
+    const origins = /** @type {Record<string, {space: string, tab: string}>} */ (shared("along.floats.origins") ?? {});
+    if (origins[terminal]) {
+      delete origins[terminal];
+      setShared("along.floats.origins", origins);
+    }
+    closeOverlay(overlay);
+  }
+
   render() {
     const t = theme();
     const { terminal, overlay } = props() ?? {};
@@ -64,10 +95,7 @@ export default class Float extends View {
       .when(Boolean(st), (el) => el.child(div().flex_none().text_color(t[st] ?? t.dim).child(WORDS[st] ?? st)))
       .child(div().flex_1())
       .child(
-        this.button(t, "keep", home ? "↙ go to" : "↙ send back", () => {
-          run(home ? "pane.focus" : "terminal.keep", { terminal });
-          closeOverlay(overlay);
-        }),
+        this.button(t, "keep", home ? "↙ go to" : "↙ send back", () => this.back()),
       )
       .child(this.button(t, "close", "✕", () => closeOverlay(overlay)));
   }
