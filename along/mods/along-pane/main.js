@@ -58,7 +58,7 @@ export default class Pane extends View {
       .hover((s) => s.bg(t.hover).text_color(t.foreground))
       .on_click((_e, cx) => {
         cx.stop_propagation();
-        onClick();
+        onClick(cx);
       })
       .child(svg(`mods/along-pane/${icon}.svg`).size(14));
   }
@@ -93,7 +93,7 @@ export default class Pane extends View {
         .hover((s) => s.bg(t.hover))
         .on_click((_e, cx) => {
           cx.stop_propagation();
-          onClick();
+          onClick(cx);
           this.menu = false;
           cx.notify();
         })
@@ -108,7 +108,7 @@ export default class Pane extends View {
       .border_color(t.border)
       .rounded(6)
       .shadow_md()
-      .child(item(`pm-f-${pane}`, "float", "Float", () => this.float(p)))
+      .child(item(`pm-f-${pane}`, "float", "Float", (cx) => this.float(p, cx)))
       .child(item(`pm-r-${pane}`, "split-right", "Split right", () => run("pane.split", { direction: "right", pane })))
       .child(item(`pm-d-${pane}`, "split-down", "Split down", () => run("pane.split", { direction: "down", pane })))
       .child(item(`pm-z-${pane}`, p.zoomed ? "unzoom" : "zoom", p.zoomed ? "Unzoom" : "Zoom", () => run("pane.zoom", { pane })))
@@ -120,64 +120,82 @@ export default class Pane extends View {
     return this.width > 0 && this.width < NARROW;
   }
 
-  // 把这个 pane 飘起来：park 让终端脱离布局（继续运行），
-  // 再开一个可拖动的悬浮窗口装住它，顶栏是 along-float。
-  // 先记住它来自哪个 space/tab，再逐个 await pane.go 探四周邻居
-  // （命令是返回后才应用，不 await 读到的还是旧焦点），
-  // send back 时按原方位 split 回去。
-  async float(p) {
+  // 把这个 pane 飘起来：先开悬浮窗（体感即时），再探四周邻居、park。
+  // 命令是异步应用的：每步都轮询 focused() 直到反映变化，否则读到旧值。
+  // park 后把键盘交给悬浮窗里的终端（window overlay 打开时不抢键盘）。
+  float(p, cx) {
     const terminal = p.terminal;
     if (!terminal) return;
-    const space = spaces().find((s) => (s.tabs ?? []).some((t) => t.id === p.tab));
-    const tab = space?.tabs?.find((t) => t.id === p.tab);
-    if (space && tab) {
-      let neighbors = null;
-      try {
-        await run("pane.focus", { pane: p.pane });
-        const probe = async (dir) => {
-          await run("pane.go", { direction: dir });
-          const f = focused();
-          return f?.pane && f.pane !== p.pane && f.tab === p.tab ? f.pane : null;
-        };
-        neighbors = {};
-        for (const dir of ["left", "up", "right", "down"]) {
-          neighbors[dir] = await probe(dir);
-          await run("pane.focus", { pane: p.pane });
+    cx.spawn(async (task) => {
+      openOverlay({
+        kind: "window",
+        key: `along-float-${terminal}`,
+        width: 640,
+        height: 440,
+        layout: {
+          id: "along-float",
+          type: "column",
+          children: [
+            {
+              id: "along-float-bar",
+              type: "block",
+              size: { px: 34 },
+              content: { mod: "along-float", props: { terminal } }
+            },
+            {
+              id: "along-float-term",
+              type: "block",
+              weight: 1,
+              content: { terminal }
+            }
+          ]
         }
-      } catch {
-        neighbors = null;
-      }
-      if (neighbors) {
-        const origins = /** @type {Record<string, {space: string, tab: string, neighbors: Record<string, string | null>}>} */ (shared("along.floats.origins") ?? {});
-        origins[terminal] = { space: space.id, tab: tab.id, neighbors };
-        setShared("along.floats.origins", origins);
-      }
-    }
-    openOverlay({
-      kind: "window",
-      key: `along-float-${terminal}`,
-      width: 640,
-      height: 440,
-      layout: {
-        id: "along-float",
-        type: "column",
-        children: [
-          {
-            id: "along-float-bar",
-            type: "block",
-            size: { px: 34 },
-            content: { mod: "along-float", props: { terminal } }
-          },
-          {
-            id: "along-float-term",
-            type: "block",
-            weight: 1,
-            content: { terminal }
+      });
+      const space = spaces().find((s) => (s.tabs ?? []).some((t) => t.id === p.tab));
+      const tab = space?.tabs?.find((t) => t.id === p.tab);
+      if (space && tab) {
+        let neighbors = null;
+        try {
+          const settle = async (pred, tries = 12) => {
+            for (let i = 0; i < tries; i++) {
+              await task.sleep(25);
+              const f = focused();
+              if (pred(f)) return f;
+            }
+            return null;
+          };
+          await run("pane.focus", { pane: p.pane });
+          await settle((f) => f?.pane === p.pane);
+          const probe = async (dir) => {
+            await run("pane.go", { direction: dir });
+            const f = await settle((g) => g?.pane && g.pane !== p.pane && g.tab === p.tab);
+            await run("pane.focus", { pane: p.pane });
+            await settle((g) => g?.pane === p.pane);
+            return f?.pane ?? null;
+          };
+          neighbors = {};
+          for (const dir of ["left", "up", "right", "down"]) {
+            neighbors[dir] = await probe(dir);
           }
-        ]
+        } catch {
+          neighbors = null;
+        }
+        if (neighbors) {
+          const origins = /** @type {Record<string, {space: string, tab: string, neighbors: Record<string, string | null>}>} */ (shared("along.floats.origins") ?? {});
+          origins[terminal] = { space: space.id, tab: tab.id, neighbors };
+          setShared("along.floats.origins", origins);
+        }
+      }
+      run("terminal.park", { terminal });
+      for (let i = 0; i < 20; i++) {
+        await task.sleep(50);
+        try {
+          await run("pane.focus", { terminal });
+        } catch {}
+        const f = focused();
+        if (f?.terminal === terminal && !f?.pane) break;
       }
     });
-    run("terminal.park", { terminal });
   }
 
   render(cx) {
@@ -206,7 +224,6 @@ export default class Pane extends View {
         const w = e.bounds?.width ?? 0;
         if (w && Math.abs(w - this.width) > 0.5) {
           this.width = w;
-          setShared("along.debug.pane_width", w);
           cx.notify();
         }
       })
@@ -220,7 +237,7 @@ export default class Pane extends View {
       .when(this.hovered || this.menu, el => el
         .when(this.narrow(), el2 => el2.child(this.more(t, pane, p)))
         .when(!this.narrow(), el2 => el2
-          .when(Boolean(p.terminal), el3 => el3.child(this.button(t, `ph-f-${pane}`, "float", () => this.float(p))))
+          .when(Boolean(p.terminal), el3 => el3.child(this.button(t, `ph-f-${pane}`, "float", (cx) => this.float(p, cx))))
           .child(this.button(t, `ph-r-${pane}`, "split-right", () => run("pane.split", { direction: "right", pane })))
           .child(this.button(t, `ph-d-${pane}`, "split-down", () => run("pane.split", { direction: "down", pane })))
           .child(this.button(t, `ph-z-${pane}`, p.zoomed ? "unzoom" : "zoom", () => run("pane.zoom", { pane })))

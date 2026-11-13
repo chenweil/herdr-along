@@ -14,7 +14,10 @@ Earlier builds did not carry a version number; this log starts at 0.3.0.
   direction (left neighbor → split right of it, upper neighbor → split below
   it; with only a right or lower neighbor it splits mirrored and then
   `pane.swap`s back to the old side once the kept pane exists), or, when
-  that tab is gone, a new tab in that space. "✕" closes
+  that tab is gone, a new tab in that space. Every step polls until the
+  command has actually applied (commands land after `run` returns, so the
+  old code read stale focus and always split right). The float takes the
+  keyboard when it opens. "✕" closes
   the window and leaves the terminal parked. Floats remember where they
   were dropped and reopen with the layout.
 
