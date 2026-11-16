@@ -9,7 +9,7 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex, Popover } from "gpui-base";
-import { panes, props, run, openOverlay, theme, home, layout, spaces, focused, shared, setShared } from "herdr";
+import { panes, props, run, openOverlay, closeOverlay, theme, home, layout, spaces, focused, shared, setShared, notify } from "herdr";
 
 // 头部宽度小于这个值就把按钮收进一个「⋯」菜单：按钮条太宽时会撞上
 // app 画在 pane 顶边中央的拖拽把手（grip），窄 pane 里点不到按钮。
@@ -120,80 +120,75 @@ export default class Pane extends View {
     return this.width > 0 && this.width < NARROW;
   }
 
-  // 把这个 pane 飘起来：先开悬浮窗（体感即时），再探四周邻居、park。
-  // 命令是异步应用的：每步都轮询 focused() 直到反映变化，否则读到旧值。
-  // park 后把键盘交给悬浮窗里的终端（window overlay 打开时不抢键盘）。
+  // 把这个 pane 飘起来。初始化期间先标记 pending，悬浮窗按钮会禁用；
+  // 只有 terminal.park 确认完成后才解除 pending，避免窗口刚打开就被送回。
   float(p, cx) {
     const terminal = p.terminal;
     if (!terminal) return;
+    const pending = shared("along.floats.pending") && typeof shared("along.floats.pending") === "object"
+      ? shared("along.floats.pending")
+      : {};
+    pending[terminal] = true;
+    setShared("along.floats.pending", pending);
     cx.spawn(async (task) => {
-      openOverlay({
-        kind: "window",
-        key: `along-float-${terminal}`,
-        width: 640,
-        height: 440,
-        layout: {
-          id: "along-float",
-          type: "column",
-          children: [
-            {
-              id: "along-float-bar",
-              type: "block",
-              size: { px: 34 },
-              content: { mod: "along-float", props: { terminal } }
-            },
-            {
-              id: "along-float-term",
-              type: "block",
-              weight: 1,
-              content: { terminal }
-            }
-          ]
-        }
-      });
-      const space = spaces().find((s) => (s.tabs ?? []).some((t) => t.id === p.tab));
-      const tab = space?.tabs?.find((t) => t.id === p.tab);
-      if (space && tab) {
-        let neighbors = null;
-        try {
-          const settle = async (pred, tries = 12) => {
+      let overlay = null;
+      try {
+        overlay = openOverlay({
+          kind: "window",
+          key: `along-float-${terminal}`,
+          width: 640,
+          height: 440,
+          layout: {
+            id: "along-float",
+            type: "column",
+            children: [
+              { id: "along-float-bar", type: "block", size: { px: 34 }, content: { mod: "along-float", props: { terminal } } },
+              { id: "along-float-term", type: "block", weight: 1, content: { terminal } }
+            ]
+          }
+        });
+        const space = spaces().find((s) => (s.tabs ?? []).some((t) => t.id === p.tab));
+        const tab = space?.tabs?.find((t) => t.id === p.tab);
+        if (space && tab) {
+          const settle = async (pred, tries = 20) => {
             for (let i = 0; i < tries; i++) {
               await task.sleep(25);
               const f = focused();
               if (pred(f)) return f;
             }
-            return null;
+            throw new Error("pane focus did not settle");
           };
-          await run("pane.focus", { pane: p.pane });
-          await settle((f) => f?.pane === p.pane);
-          const probe = async (dir) => {
-            await run("pane.go", { direction: dir });
-            const f = await settle((g) => g?.pane && g.pane !== p.pane && g.tab === p.tab);
+          let neighbors = {};
+          try {
             await run("pane.focus", { pane: p.pane });
-            await settle((g) => g?.pane === p.pane);
-            return f?.pane ?? null;
-          };
-          neighbors = {};
-          for (const dir of ["left", "up", "right", "down"]) {
-            neighbors[dir] = await probe(dir);
+            await settle((f) => f?.pane === p.pane);
+            const probe = async (dir) => {
+              await run("pane.go", { direction: dir });
+              const moved = await settle((f) => f?.pane && f.pane !== p.pane && f.tab === p.tab).catch(() => null);
+              await run("pane.focus", { pane: p.pane });
+              await settle((f) => f?.pane === p.pane);
+              return moved?.pane ?? null;
+            };
+            for (const dir of ["left", "up", "right", "down"]) neighbors[dir] = await probe(dir);
+          } catch {
+            neighbors = { left: null, up: null, right: null, down: null };
           }
-        } catch {
-          neighbors = null;
-        }
-        if (neighbors) {
-          const origins = /** @type {Record<string, {space: string, tab: string, spaceName: string, tabName: string, neighbors: Record<string, string | null>}>} */ (shared("along.floats.origins") ?? {});
+          const origins = /** @type {Record<string, object>} */ (shared("along.floats.origins") ?? {});
           origins[terminal] = { space: space.id, tab: tab.id, spaceName: space.name, tabName: tab.name, neighbors };
           setShared("along.floats.origins", origins);
         }
-      }
-      run("terminal.park", { terminal });
-      for (let i = 0; i < 20; i++) {
-        await task.sleep(50);
-        try {
-          await run("pane.focus", { terminal });
-        } catch {}
-        const f = focused();
-        if (f?.terminal === terminal && !f?.pane) break;
+        run("terminal.park", { terminal });
+        for (let i = 0; i < 30 && panes().some((x) => x.terminal === terminal); i++) await task.sleep(100);
+        if (panes().some((x) => x.terminal === terminal)) throw new Error("terminal.park did not complete");
+      } catch (e) {
+        if (overlay) closeOverlay(overlay);
+        notify({ title: "Float failed", body: String(e?.message ?? e) });
+      } finally {
+        const state = shared("along.floats.pending") && typeof shared("along.floats.pending") === "object"
+          ? shared("along.floats.pending")
+          : {};
+        delete state[terminal];
+        setShared("along.floats.pending", state);
       }
     });
   }
@@ -229,7 +224,11 @@ export default class Pane extends View {
       })
       .on_click(() => {
         // 记录用户最后点击的主布局 pane，悬浮窗的方向按钮以它为落点。
-        setShared("along.floats.target", { pane, tab: p.tab });
+        const targets = shared("along.floats.targets") && typeof shared("along.floats.targets") === "object"
+          ? shared("along.floats.targets")
+          : {};
+        targets[p.tab] = { pane, at: Date.now() };
+        setShared("along.floats.targets", targets);
         run("pane.focus", { pane });
       })
       .when(Boolean(pic), (el) => el.child(pic))

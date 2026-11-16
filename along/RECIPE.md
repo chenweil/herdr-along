@@ -100,15 +100,19 @@ Files and Changes.
     `shared("along.floats.origins")`, then parks the pane's terminal with
     `terminal.park` (the terminal keeps running without a pane) and opens a
     `kind: "window"` overlay whose layout holds the along-float bar and a
-    `{ terminal }` block. The window's `key` (`along-float-<terminal>`)
-    remembers where it was dropped and reopens it there.
+    `{ terminal }` block. Main-pane clicks record the current target by tab
+    in `shared("along.floats.targets")`. Herdr does not expose a reliable
+    dragged-overlay rectangle or all pane rectangles, so Along deliberately
+    does not infer a drop target from the float's visual position.
   - `along-float/` — the floating window's bar, a copy of the shipped
-    `peek` bar. Shows the program icon, name and agent status; "↙ send
-    back" returns the terminal to the space and tab it was floated from,
-    splitting off the nearest surviving recorded neighbor in its original
-    direction (tab gone: a new tab in that space) and closes the overlay;
-    "✕" just closes it (the terminal stays parked; the agents list can
-    bring it back).
+    `peek` bar. Shows the program icon, name and agent status; the four
+    direction buttons return the terminal beside the currently focused pane
+    (then the per-tab remembered target, then the recorded source neighbor
+    as fallback). The direction is explicit because the overlay's visual
+    position is not exposed reliably by the mod API. The drop icon is a
+    default-right action, and every return waits for `terminal.keep` to
+    create a pane before closing the overlay. "✕" leaves the terminal
+    parked and discards its float origin.
   - `along-files/` — the shipped `files` mod plus `openOverlay`, the
     `windows`/`joiner` path helpers, a `rowMenu(path, entry)` method, an
     `.on_mouse_down("right", …)` on each row, and its own asset paths
@@ -180,9 +184,15 @@ Files and Changes.
   and Enable brings it back with its target.
 - Hovering a pane header shows the Float button; clicking it removes the
   pane from the layout and opens a draggable floating window holding the
-  same terminal, with the along-float bar on top. "↙ send back" closes the
-  window and the terminal gets a pane again; "✕" closes the window and the
-  terminal stays parked (the agents list can bring it back). A float
-  remembers where it was dropped and reopens there after a restart.
+  same terminal, with the along-float bar on top. While it is preparing,
+  the drop controls are disabled. Click a main-layout pane to focus the
+  desired target, then use `←`, `→`, `↑` or `↓` to split the terminal beside
+  that target. If no target is available, the chosen direction is tried
+  against the recorded source neighbors; if those are unavailable, a new
+  tab is used. The drop icon is the default-right action. Every return waits
+  for `terminal.keep` to create the pane before closing the window. `✕`
+  leaves the terminal parked and discards the source record; the agents
+  list can bring it back. The overlay position is remembered only by the
+  host window; Along does not use it to infer a drop target.
 - Switching to another layout and back keeps the panels, and Files still
   follows the focused pane's folder.

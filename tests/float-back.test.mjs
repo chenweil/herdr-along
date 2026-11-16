@@ -10,7 +10,7 @@ for (const side of ['left', 'up', 'right', 'down']) {
     const failures = [];
     let kept = false;
     let closed = false;
-    let focus = { tab: 'tab', pane: 'neighbor' };
+    let focus = { space: 'space', tab: 'tab', pane: 'neighbor' };
     const origins = {
       terminal: { space: 'space', tab: 'tab', neighbors: { [side]: 'neighbor' } }
     };
@@ -26,12 +26,12 @@ for (const side of ['left', 'up', 'right', 'down']) {
       run: (name, args) => {
         commands.push({ name, args });
         if (name === 'terminal.keep') kept = true;
-        if (name === 'pane.focus') focus = { tab: 'tab', pane: args.pane };
+        if (name === 'pane.focus') focus = { space: 'space', tab: 'tab', pane: args.pane };
       },
       theme: () => ({}),
       props: () => ({ terminal: 'terminal', overlay: 'overlay' }),
       closeOverlay: () => { closed = true; },
-      shared: () => origins,
+      shared: (key) => key === 'along.floats.origins' ? origins : key === 'along.floats.pending' ? {} : {},
       setShared: () => {},
       notify: (value) => failures.push(value)
     };

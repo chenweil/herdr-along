@@ -1,6 +1,6 @@
 // The bar on top of a floated pane (the window overlay along-pane's Float
 // button opens after parking the terminal): who it is and how it's doing,
-// the ↙ arrow sends the terminal back into the layout, ✕ closes the window
+// the drop icon and four direction buttons send the terminal back into the layout, ✕ closes the window
 // (the terminal keeps running parked; the agents list can bring it back).
 // Props: { terminal, overlay }. Presses on the bar drag the window; the
 // buttons stop them.
@@ -27,8 +27,13 @@ export default class Float extends View {
     return agents().find((a) => a.address === addr)?.status ?? this.term()?.status ?? null;
   }
 
+  pending() {
+    const state = shared("along.floats.pending");
+    return Boolean(state && typeof state === "object" && state[props()?.terminal]);
+  }
+
   // 图标按钮：iconName 为 mods/along-float/ 下的 svg 名
-  button(t, id, label, onClick, iconName) {
+  button(t, id, label, onClick, iconName, disabled = false) {
     const el = h_flex()
       .id(id)
       .px(8)
@@ -36,17 +41,19 @@ export default class Float extends View {
       .gap(5)
       .items_center()
       .rounded(5)
-      .text_color(t.muted)
+      .text_color(disabled ? t.dim : t.muted)
+      .opacity(disabled ? 0.45 : 1)
       .cursor_pointer()
+      .disabled(disabled)
       .hover((s) => s.bg(t.hover).text_color(t.foreground))
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
-      .on_click(onClick);
+      .on_click((_e, cx) => { if (!disabled) onClick(_e, cx); });
     if (iconName) el.child(svg(`mods/along-float/${iconName}.svg`).size(12).flex_none());
     return el.child(label);
   }
 
-  // 按用户最后点击的主布局 pane 和指定方向落回。
-  // Herdr 当前没有悬浮窗坐标 API，所以不能从拖动位置自动推断目标。
+  // 按用户当前聚焦/最近点击的主布局 pane 和指定方向落回。
+  // Herdr 当前没有稳定的悬浮窗坐标 API，所以不从拖动位置自动推断目标。
   async restoreAt(task, terminal, target, direction) {
     const settle = async (pred, tries = 20) => {
       for (let i = 0; i < tries; i++) {
@@ -57,35 +64,37 @@ export default class Float extends View {
       return null;
     };
     run("pane.focus", { pane: target.pane });
-    await settle((f) => f?.pane === target.pane);
+    if (!await settle((f) => f?.pane === target.pane)) throw new Error("target pane focus did not settle");
     const place = direction === "left" ? "right" : direction === "up" ? "down" : direction;
     run("terminal.keep", { terminal, place });
+    let returned = null;
+    for (let i = 0; i < 30; i++) {
+      await task.sleep(100);
+      returned = panes().find((p) => p.terminal === terminal);
+      if (returned) break;
+    }
+    if (!returned) throw new Error("terminal.keep did not create a pane");
     if (direction === "left" || direction === "up") {
-      for (let i = 0; i < 20; i++) {
-        await task.sleep(100);
-        const returned = panes().find((p) => p.terminal === terminal);
-        if (!returned) continue;
-        run("pane.focus", { pane: returned.pane });
-        await settle((f) => f?.pane === returned.pane);
-        run("pane.swap", { direction });
-        return;
-      }
+      run("pane.focus", { pane: returned.pane });
+      if (!await settle((f) => f?.pane === returned.pane)) throw new Error("returned pane focus did not settle");
+      run("pane.swap", { direction });
     }
   }
 
-  // 送回布局：优先使用用户点击的目标 pane；没有目标时才按 float 来源兜底。
-  // 方向按钮对应目标 pane 的四个边，不再依赖当前焦点猜测。
+  // 送回布局：优先使用本次操作前聚焦的目标 pane，再用按 tab 保存的目标，
+  // 最后按 float 来源兜底。方向按钮对应目标 pane 的四个边。
   // split：左邻→它右边，上邻→它下面；只有右/下邻的先 split 到镜像侧，
   // 等 keep 在后台建好新 pane 后再 pane.swap 换回原侧。邻居都不在了就
   // 紧挨焦点 pane；原 tab 不在就回原 space 的新 tab。
   // 命令是异步应用的：每步都轮询 focused()/panes() 直到反映变化。
   back(cx, direction = "right") {
-    if (this.backing) return;
+    if (this.backing || this.pending()) return;
     const { terminal, overlay } = props() ?? {};
     if (!terminal) return;
     this.backing = true;
     cx.spawn(async (task) => {
       try {
+        const initialFocus = focused();
         const settle = async (pred, tries = 12) => {
           for (let i = 0; i < tries; i++) {
             await task.sleep(25);
@@ -93,6 +102,14 @@ export default class Float extends View {
             if (pred(f)) return f;
           }
           return null;
+        };
+        const waitForPane = async (tries = 30) => {
+          for (let i = 0; i < tries; i++) {
+            await task.sleep(100);
+            const returned = panes().find((p) => p.terminal === terminal);
+            if (returned) return returned;
+          }
+          throw new Error("terminal.keep did not create a pane");
         };
         const home = panes().some((p) => p.terminal === terminal);
         if (home) {
@@ -108,60 +125,74 @@ export default class Float extends View {
         const space = origin && match(spaces(), origin.space, origin.spaceName);
         const tab = space && origin && match(space.tabs ?? [], origin.tab, origin.tabName);
         if (!space) {
-          // 原 space 没了（记录已失效）：落到当前 space 的新 tab，并清掉记录。
+          // 原 space 没了：确认新 tab 已创建后再关窗。
           run("terminal.keep", { terminal, place: "tab" });
+          await waitForPane();
           this.done(terminal, overlay);
           return;
         }
         run("space.select", { id: space.id });
         if (!tab) {
           run("terminal.keep", { terminal, place: "tab" });
+          await waitForPane();
           this.done(terminal, overlay);
           return;
         }
         run("tab.select", { id: tab.id });
-        await settle((f) => f?.tab === tab.id);
+        if (!await settle((f) => f?.space === space.id && f?.tab === tab.id)) {
+          throw new Error("origin tab did not settle");
+        }
         const here = new Set(panes().filter((x) => x.tab === tab.id).map((x) => x.pane));
         if (here.size === 0) {
           run("terminal.keep", { terminal, place: "tab" });
+          await waitForPane();
           this.done(terminal, overlay);
           return;
         }
         // 优先使用当前真正聚焦的主布局 pane。点击终端内容区也会聚焦
         // pane，但不会经过 along-pane 的 header click，因此不能只依赖 shared。
-        const focusedTarget = focused()?.pane && panes().find((p) => p.pane === focused().pane && p.tab === tab.id);
-        const picked = shared("along.floats.target");
+        const focusedTarget = initialFocus?.tab === tab.id && initialFocus.pane
+          ? panes().find((p) => p.pane === initialFocus.pane && p.tab === tab.id)
+          : null;
+        const targetMap = shared("along.floats.targets");
+        const picked = targetMap && typeof targetMap === "object" ? targetMap[tab.id] : null;
         const rememberedTarget = picked && panes().find((p) => p.pane === picked.pane && p.tab === tab.id);
         const target = focusedTarget ?? rememberedTarget;
+        if (picked && !rememberedTarget) {
+          const nextTargets = { ...(targetMap ?? {}) };
+          delete nextTargets[tab.id];
+          setShared("along.floats.targets", nextTargets);
+        }
         if (target) {
           await this.restoreAt(task, terminal, target, direction);
           this.done(terminal, overlay);
           return;
         }
-        const plan = [["left", "right", null], ["up", "down", null], ["right", "right", "left"], ["down", "down", "up"]];
-        let handled = false;
-        for (const [side, place, swapBack] of plan) {
+        const plan = {
+          left: ["left", "up", "right", "down"],
+          up: ["up", "left", "right", "down"],
+          right: ["right", "left", "up", "down"],
+          down: ["down", "left", "up", "right"]
+        }[direction] ?? ["right", "left", "up", "down"];
+        let restored = false;
+        for (const side of plan) {
           const neighbor = origin?.neighbors?.[side];
           if (!neighbor || !here.has(neighbor)) continue;
-          run("pane.focus", { pane: neighbor });
-          await settle((f) => f?.pane === neighbor);
-          run("terminal.keep", { terminal, place });
-          if (swapBack) {
-            // keep 在后台完成：等终端拿到新 pane，再 swap 换回原侧。
-            for (let i = 0; i < 20 && !panes().some((x) => x.terminal === terminal); i++) {
-              await task.sleep(100);
-            }
-            const p2 = panes().find((x) => x.terminal === terminal);
-            if (p2) {
-              run("pane.focus", { pane: p2.pane });
-              await settle((f) => f?.pane === p2.pane);
-              run("pane.swap", { direction: swapBack });
-            }
-          }
-          handled = true;
+          await this.restoreAt(task, terminal, { pane: neighbor }, side);
+          restored = true;
           break;
         }
-        if (!handled) run("terminal.keep", { terminal, place: "right" });
+        if (!restored) {
+          // 没有目标和有效来源邻居时，明确落到新 tab，而不是猜一个右侧 pane。
+          run("terminal.keep", { terminal, place: "tab" });
+          let returned = null;
+          for (let i = 0; i < 30; i++) {
+            await task.sleep(100);
+            returned = panes().find((p) => p.terminal === terminal);
+            if (returned) break;
+          }
+          if (!returned) throw new Error("terminal.keep did not create a fallback tab");
+        }
         this.done(terminal, overlay);
       } catch (e) {
         // 失败不清窗（还能重试），报告原因，并解锁按钮。
@@ -172,9 +203,19 @@ export default class Float extends View {
     });
   }
 
-  // 清掉记录并关窗。
+  // 成功落回：清掉来源记录并关窗。
   done(terminal, overlay) {
-    const origins = /** @type {Record<string, {space: string, tab: string, neighbors: Record<string, string | null>}>} */ (shared("along.floats.origins") ?? {});
+    const origins = /** @type {Record<string, object>} */ (shared("along.floats.origins") ?? {});
+    if (origins[terminal]) {
+      delete origins[terminal];
+      setShared("along.floats.origins", origins);
+    }
+    closeOverlay(overlay);
+  }
+
+  // 关闭浮窗意味着放弃这次来源恢复；终端仍 parked，可从 agents 列表找回。
+  dismiss(terminal, overlay) {
+    const origins = /** @type {Record<string, object>} */ (shared("along.floats.origins") ?? {});
     if (origins[terminal]) {
       delete origins[terminal];
       setShared("along.floats.origins", origins);
@@ -188,7 +229,7 @@ export default class Float extends View {
     const k = this.term();
     const st = this.status();
     const pic = icon(k?.program, 14, t.foreground);
-    const home = panes().some((p) => p.terminal === terminal);
+    const pending = this.pending();
     const glyph = st === "working" ? "⠋" : st === "idle" ? "○" : st ? "●" : "·";
     return h_flex()
       .size_full()
@@ -204,17 +245,12 @@ export default class Float extends View {
       .child(div().truncate().font_semibold().text_color(t.foreground).child(k?.name || k?.template || k?.program?.name || terminal || ""))
       .when(Boolean(st), (el) => el.child(div().flex_none().text_color(t[st] ?? t.dim).child(WORDS[st] ?? st)))
       .child(div().flex_1())
-      .child(div()
-        .id("drop-indicator")
-        .p(3)
-        .rounded(4)
-        .text_color(t.dim)
-        .child(svg("mods/along-float/back.svg").size(14))
-        .tooltip("落回当前聚焦 pane；找不到目标时使用来源 pane兜底"))
-      .child(this.button(t, "back-left", "←", (_e, cx) => this.back(cx, "left")).tooltip("落到目标 pane 左侧；无目标时兜底"))
-      .child(this.button(t, "back-right", "→", (_e, cx) => this.back(cx, "right")).tooltip("落到目标 pane 右侧；无目标时兜底"))
-      .child(this.button(t, "back-up", "↑", (_e, cx) => this.back(cx, "up")).tooltip("落到目标 pane 上方；无目标时兜底"))
-      .child(this.button(t, "back-down", "↓", (_e, cx) => this.back(cx, "down")).tooltip("落到目标 pane 下方；无目标时兜底"))
-      .child(this.button(t, "close", "✕", () => closeOverlay(overlay)));
+      .child(this.button(t, "drop", "", (_e, cx) => this.back(cx), "back", pending)
+        .tooltip(pending ? "正在准备悬浮 pane" : "落回当前聚焦 pane；找不到目标时使用来源 pane兜底"))
+      .child(this.button(t, "back-left", "←", (_e, cx) => this.back(cx, "left"), null, pending).tooltip("落到目标 pane 左侧；无目标时兜底"))
+      .child(this.button(t, "back-right", "→", (_e, cx) => this.back(cx, "right"), null, pending).tooltip("落到目标 pane 右侧；无目标时兜底"))
+      .child(this.button(t, "back-up", "↑", (_e, cx) => this.back(cx, "up"), null, pending).tooltip("落到目标 pane 上方；无目标时兜底"))
+      .child(this.button(t, "back-down", "↓", (_e, cx) => this.back(cx, "down"), null, pending).tooltip("落到目标 pane 下方；无目标时兜底"))
+      .child(this.button(t, "close", "✕", () => this.dismiss(terminal, overlay)));
   }
 }

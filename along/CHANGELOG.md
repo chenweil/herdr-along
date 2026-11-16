@@ -4,6 +4,12 @@ Earlier builds did not carry a version number; this log starts at 0.3.0.
 
 ## 0.4.0 - 2026-11-13
 
+- The float drop design is explicit rather than coordinate-based. Herdr's
+  mod API does not expose a reliable dragged-overlay rectangle or all pane
+  rectangles, so Along records the currently focused/last-clicked pane and
+  uses explicit left/right/up/down controls. This avoids restoring beside a
+  stale or guessed pane.
+
 - Floating panes now use an explicit drop target: clicking a main-layout
   pane records it, and the float bar provides left, right, up and down
   buttons to return beside that target. The old source-neighbor behavior
