@@ -4,6 +4,13 @@ Earlier builds did not carry a version number; this log starts at 0.3.0.
 
 ## 0.4.0 - 2026-11-13
 
+- Floating panes now use an explicit drop target: clicking a main-layout
+  pane records it, and the float bar provides left, right, up and down
+  buttons to return beside that target. The old source-neighbor behavior
+  remains as a fallback. Herdr's current mod API does not expose a dragged
+  window's screen rectangle, so the mod cannot infer the target from the
+  float's visual position.
+
 - Pane headers (now the along-pane fork of the shipped pane mod) gain a
   Float button: it parks the pane's terminal (it keeps running without a
   pane) and opens a draggable floating window that holds it, topped by the

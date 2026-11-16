@@ -227,7 +227,11 @@ export default class Pane extends View {
           cx.notify();
         }
       })
-      .on_click(() => run("pane.focus", { pane }))
+      .on_click(() => {
+        // 记录用户最后点击的主布局 pane，悬浮窗的方向按钮以它为落点。
+        setShared("along.floats.target", { pane, tab: p.tab });
+        run("pane.focus", { pane });
+      })
       .when(Boolean(pic), (el) => el.child(pic))
       .child(div().flex_none().truncate().max_w(260).font_medium().text_color(t.foreground).child(name))
       .child(div().flex_1().truncate().text_color(t.dim).child(folder(p.cwd)))

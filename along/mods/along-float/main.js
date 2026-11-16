@@ -45,12 +45,41 @@ export default class Float extends View {
     return el.child(label);
   }
 
-  // 送回布局：优先回到 float 之前的原 space/tab，按 float 时探到的邻居方位
+  // 按用户最后点击的主布局 pane 和指定方向落回。
+  // Herdr 当前没有悬浮窗坐标 API，所以不能从拖动位置自动推断目标。
+  async restoreAt(task, terminal, target, direction) {
+    const settle = async (pred, tries = 20) => {
+      for (let i = 0; i < tries; i++) {
+        await task.sleep(25);
+        const f = focused();
+        if (pred(f)) return f;
+      }
+      return null;
+    };
+    run("pane.focus", { pane: target.pane });
+    await settle((f) => f?.pane === target.pane);
+    const place = direction === "left" ? "right" : direction === "up" ? "down" : direction;
+    run("terminal.keep", { terminal, place });
+    if (direction === "left" || direction === "up") {
+      for (let i = 0; i < 20; i++) {
+        await task.sleep(100);
+        const returned = panes().find((p) => p.terminal === terminal);
+        if (!returned) continue;
+        run("pane.focus", { pane: returned.pane });
+        await settle((f) => f?.pane === returned.pane);
+        run("pane.swap", { direction });
+        return;
+      }
+    }
+  }
+
+  // 送回布局：优先使用用户点击的目标 pane；没有目标时才按 float 来源兜底。
+  // 方向按钮对应目标 pane 的四个边，不再依赖当前焦点猜测。
   // split：左邻→它右边，上邻→它下面；只有右/下邻的先 split 到镜像侧，
   // 等 keep 在后台建好新 pane 后再 pane.swap 换回原侧。邻居都不在了就
   // 紧挨焦点 pane；原 tab 不在就回原 space 的新 tab。
   // 命令是异步应用的：每步都轮询 focused()/panes() 直到反映变化。
-  back(cx) {
+  back(cx, direction = "right") {
     if (this.backing) return;
     const { terminal, overlay } = props() ?? {};
     if (!terminal) return;
@@ -95,6 +124,13 @@ export default class Float extends View {
         const here = new Set(panes().filter((x) => x.tab === tab.id).map((x) => x.pane));
         if (here.size === 0) {
           run("terminal.keep", { terminal, place: "tab" });
+          this.done(terminal, overlay);
+          return;
+        }
+        const picked = shared("along.floats.target");
+        const target = picked && panes().find((p) => p.pane === picked.pane && p.tab === tab.id);
+        if (target) {
+          await this.restoreAt(task, terminal, target, direction);
           this.done(terminal, overlay);
           return;
         }
@@ -164,10 +200,13 @@ export default class Float extends View {
       .child(div().truncate().font_semibold().text_color(t.foreground).child(k?.name || k?.template || k?.program?.name || terminal || ""))
       .when(Boolean(st), (el) => el.child(div().flex_none().text_color(t[st] ?? t.dim).child(WORDS[st] ?? st)))
       .child(div().flex_1())
-      .child(
-        this.button(t, "keep", home ? "go to" : "send back", (_e, cx) => this.back(cx), "back")
-          .tooltip(home ? "Go to the terminal in the layout" : "Send the terminal back into the layout"),
-      )
+      .child(div().text_color(t.dim).text_size(11).child("落到当前 Pane："))
+      .child(this.button(t, "back-left", "←", (_e, cx) => this.back(cx, "left")).tooltip("落到目标 pane 左侧"))
+      .child(this.button(t, "back-right", "→", (_e, cx) => this.back(cx, "right")).tooltip("落到目标 pane 右侧"))
+      .child(this.button(t, "back-up", "↑", (_e, cx) => this.back(cx, "up")).tooltip("落到目标 pane 上方"))
+      .child(this.button(t, "back-down", "↓", (_e, cx) => this.back(cx, "down")).tooltip("落到目标 pane 下方"))
+      .child(this.button(t, "keep", home ? "go to" : "send back", (_e, cx) => this.back(cx), "back")
+        .tooltip(home ? "Go to the terminal in the layout" : "使用默认位置送回布局"))
       .child(this.button(t, "close", "✕", () => closeOverlay(overlay)));
   }
 }
