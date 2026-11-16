@@ -10,7 +10,8 @@ for (const side of ['left', 'up', 'right', 'down']) {
     const failures = [];
     let kept = false;
     let closed = false;
-    let focus = { space: 'space', tab: 'tab', pane: 'neighbor' };
+    // 先处于别的 tab；tab.select 后才聚焦来源 tab，确保本用例走 fallback 邻居分支。
+    let focus = { space: 'other-space', tab: 'other-tab', pane: null };
     const origins = {
       terminal: { space: 'space', tab: 'tab', neighbors: { [side]: 'neighbor' } }
     };
@@ -26,6 +27,7 @@ for (const side of ['left', 'up', 'right', 'down']) {
       run: (name, args) => {
         commands.push({ name, args });
         if (name === 'terminal.keep') kept = true;
+        if (name === 'tab.select') focus = { space: 'space', tab: 'tab', pane: 'neighbor' };
         if (name === 'pane.focus') focus = { space: 'space', tab: 'tab', pane: args.pane };
       },
       theme: () => ({}),

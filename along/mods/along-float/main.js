@@ -164,9 +164,13 @@ export default class Float extends View {
           setShared("along.floats.targets", nextTargets);
         }
         if (target) {
-          await this.restoreAt(task, terminal, target, direction);
-          this.done(terminal, overlay);
-          return;
+          try {
+            await this.restoreAt(task, terminal, target, direction);
+            this.done(terminal, overlay);
+            return;
+          } catch {
+            // 目标 pane 可能刚被关闭；继续尝试来源邻居，不把终端落到旧焦点。
+          }
         }
         const plan = {
           left: ["left", "up", "right", "down"],
@@ -178,9 +182,13 @@ export default class Float extends View {
         for (const side of plan) {
           const neighbor = origin?.neighbors?.[side];
           if (!neighbor || !here.has(neighbor)) continue;
-          await this.restoreAt(task, terminal, { pane: neighbor }, side);
-          restored = true;
-          break;
+          try {
+            await this.restoreAt(task, terminal, { pane: neighbor }, side);
+            restored = true;
+            break;
+          } catch {
+            // 一个旧邻居失效时，继续尝试下一个方向。
+          }
         }
         if (!restored) {
           // 没有目标和有效来源邻居时，明确落到新 tab，而不是猜一个右侧 pane。
@@ -196,7 +204,7 @@ export default class Float extends View {
         this.done(terminal, overlay);
       } catch (e) {
         // 失败不清窗（还能重试），报告原因，并解锁按钮。
-        notify({ title: "Send back failed", body: String(e?.message ?? e) });
+        notify({ title: "浮窗回落失败", body: String(e?.message ?? e) });
       } finally {
         this.backing = false;
       }
@@ -205,10 +213,16 @@ export default class Float extends View {
 
   // 成功落回：清掉来源记录并关窗。
   done(terminal, overlay) {
-    const origins = /** @type {Record<string, object>} */ (shared("along.floats.origins") ?? {});
-    if (origins[terminal]) {
+    const origins = /** @type {Record<string, {tab?: string}>} */ (shared("along.floats.origins") ?? {});
+    const origin = origins[terminal];
+    if (origin) {
       delete origins[terminal];
       setShared("along.floats.origins", origins);
+      const targets = /** @type {Record<string, object>} */ (shared("along.floats.targets") ?? {});
+      if (origin.tab && targets[origin.tab]) {
+        delete targets[origin.tab];
+        setShared("along.floats.targets", targets);
+      }
     }
     closeOverlay(overlay);
   }
@@ -223,7 +237,21 @@ export default class Float extends View {
     closeOverlay(overlay);
   }
 
+  cleanupOrigins() {
+    const live = new Set(terminals().map((t) => t.address));
+    const origins = /** @type {Record<string, object>} */ (shared("along.floats.origins") ?? {});
+    let changed = false;
+    for (const terminal of Object.keys(origins)) {
+      if (!live.has(terminal)) {
+        delete origins[terminal];
+        changed = true;
+      }
+    }
+    if (changed) setShared("along.floats.origins", origins);
+  }
+
   render() {
+    this.cleanupOrigins();
     const t = theme();
     const { terminal, overlay } = props() ?? {};
     const k = this.term();
