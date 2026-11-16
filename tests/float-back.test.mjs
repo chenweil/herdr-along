@@ -10,6 +10,8 @@ for (const side of ['left', 'up', 'right', 'down']) {
     const failures = [];
     let kept = false;
     let closed = false;
+    let selected = false;
+    let stalePaneSnapshot = true;
     // 先处于别的 tab；tab.select 后才聚焦来源 tab，确保本用例走 fallback 邻居分支。
     let focus = { space: 'other-space', tab: 'other-tab', pane: null };
     const origins = {
@@ -18,16 +20,25 @@ for (const side of ['left', 'up', 'right', 'down']) {
     const api = {
       agents: () => [],
       terminals: () => [],
-      panes: () => [
-        { pane: 'neighbor', tab: 'tab', terminal: 'other' },
-        ...(kept ? [{ pane: 'returned', tab: 'tab', terminal: 'terminal' }] : [])
-      ],
+      panes: () => {
+        if (selected && stalePaneSnapshot) {
+          stalePaneSnapshot = false;
+          return [];
+        }
+        return [
+          { pane: 'neighbor', tab: 'tab', terminal: 'other' },
+          ...(kept ? [{ pane: 'returned', tab: 'tab', terminal: 'terminal' }] : [])
+        ];
+      },
       spaces: () => [{ id: 'space', tabs: [{ id: 'tab' }] }],
       focused: () => focus,
       run: (name, args) => {
         commands.push({ name, args });
         if (name === 'terminal.keep') kept = true;
-        if (name === 'tab.select') focus = { space: 'space', tab: 'tab', pane: 'neighbor' };
+        if (name === 'tab.select') {
+          selected = true;
+          focus = { space: 'space', tab: 'tab', pane: 'neighbor' };
+        }
         if (name === 'pane.focus') focus = { space: 'space', tab: 'tab', pane: args.pane };
       },
       theme: () => ({}),
@@ -66,3 +77,42 @@ for (const side of ['left', 'up', 'right', 'down']) {
     assert.equal(keep.args.place, side === 'up' || side === 'down' ? 'down' : 'right');
   });
 }
+
+test('stale pending is cleared after the floated terminal leaves the pane list', async () => {
+  const state = { terminal: true };
+  let saved;
+  const api = {
+    agents: () => [],
+    terminals: () => [{ address: 'terminal' }],
+    panes: () => [],
+    spaces: () => [],
+    focused: () => null,
+    run: () => {},
+    theme: () => ({}),
+    props: () => ({ terminal: 'terminal' }),
+    closeOverlay: () => {},
+    shared: (key) => key === 'along.floats.pending' ? state : {},
+    setShared: (key, value) => { saved = { key, value }; },
+    notify: () => {}
+  };
+  const modules = {
+    herdr: api,
+    'gpui-kit': { View: class {}, div() {}, image() {}, svg() {} },
+    'gpui-base': { h_flex() {} }
+  };
+  const source = await readFile(new URL('../along/mods/along-float/main.js', import.meta.url), 'utf8');
+  const mod = new SourceTextModule(source);
+  await mod.link((specifier) => new SyntheticModule(Object.keys(modules[specifier]), function () {
+    for (const [key, value] of Object.entries(modules[specifier])) this.setExport(key, value);
+  }));
+  await mod.evaluate();
+  const instance = new mod.namespace.default();
+
+  assert.equal(instance.pending(), false);
+  assert.deepEqual(saved, { key: 'along.floats.pending', value: {} });
+
+  state.terminal = true;
+  saved = undefined;
+  instance.done('terminal', 'overlay');
+  assert.deepEqual(saved, { key: 'along.floats.pending', value: {} });
+});

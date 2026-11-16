@@ -27,9 +27,23 @@ export default class Float extends View {
     return agents().find((a) => a.address === addr)?.status ?? this.term()?.status ?? null;
   }
 
-  pending() {
+  clearPending(terminal) {
     const state = shared("along.floats.pending");
-    return Boolean(state && typeof state === "object" && state[props()?.terminal]);
+    if (!state || typeof state !== "object" || !state[terminal]) return;
+    const next = { ...state };
+    delete next[terminal];
+    setShared("along.floats.pending", next);
+  }
+
+  pending() {
+    const terminal = props()?.terminal;
+    const state = shared("along.floats.pending");
+    if (!state || typeof state !== "object" || !state[terminal]) return false;
+    if (!panes().some((p) => p.terminal === terminal)) {
+      this.clearPending(terminal);
+      return false;
+    }
+    return true;
   }
 
   // 图标按钮：iconName 为 mods/along-float/ 下的 svg 名
@@ -111,6 +125,14 @@ export default class Float extends View {
           }
           throw new Error("terminal.keep did not create a pane");
         };
+        const waitForTabPanes = async (tabId, tries = 20) => {
+          for (let i = 0; i < tries; i++) {
+            await task.sleep(25);
+            const current = panes().filter((p) => p.tab === tabId);
+            if (current.length) return current;
+          }
+          return [];
+        };
         const home = panes().some((p) => p.terminal === terminal);
         if (home) {
           run("pane.focus", { terminal });
@@ -142,8 +164,8 @@ export default class Float extends View {
         if (!await settle((f) => f?.space === space.id && f?.tab === tab.id)) {
           throw new Error("origin tab did not settle");
         }
-        const here = new Set(panes().filter((x) => x.tab === tab.id).map((x) => x.pane));
-        if (here.size === 0) {
+        const tabPanes = await waitForTabPanes(tab.id);
+        if (tabPanes.length === 0) {
           run("terminal.keep", { terminal, place: "tab" });
           await waitForPane();
           this.done(terminal, overlay);
@@ -152,11 +174,11 @@ export default class Float extends View {
         // 优先使用当前真正聚焦的主布局 pane。点击终端内容区也会聚焦
         // pane，但不会经过 along-pane 的 header click，因此不能只依赖 shared。
         const focusedTarget = initialFocus?.tab === tab.id && initialFocus.pane
-          ? panes().find((p) => p.pane === initialFocus.pane && p.tab === tab.id)
+          ? tabPanes.find((p) => p.pane === initialFocus.pane)
           : null;
         const targetMap = shared("along.floats.targets");
         const picked = targetMap && typeof targetMap === "object" ? targetMap[tab.id] : null;
-        const rememberedTarget = picked && panes().find((p) => p.pane === picked.pane && p.tab === tab.id);
+        const rememberedTarget = picked && tabPanes.find((p) => p.pane === picked.pane);
         const target = focusedTarget ?? rememberedTarget;
         if (picked && !rememberedTarget) {
           const nextTargets = { ...(targetMap ?? {}) };
@@ -181,7 +203,7 @@ export default class Float extends View {
         let restored = false;
         for (const side of plan) {
           const neighbor = origin?.neighbors?.[side];
-          if (!neighbor || !here.has(neighbor)) continue;
+          if (!neighbor || !tabPanes.some((p) => p.pane === neighbor)) continue;
           try {
             await this.restoreAt(task, terminal, { pane: neighbor }, side);
             restored = true;
@@ -213,6 +235,7 @@ export default class Float extends View {
 
   // 成功落回：清掉来源记录并关窗。
   done(terminal, overlay) {
+    this.clearPending(terminal);
     const origins = /** @type {Record<string, {tab?: string}>} */ (shared("along.floats.origins") ?? {});
     const origin = origins[terminal];
     if (origin) {
@@ -229,6 +252,7 @@ export default class Float extends View {
 
   // 关闭浮窗意味着放弃这次来源恢复；终端仍 parked，可从 agents 列表找回。
   dismiss(terminal, overlay) {
+    this.clearPending(terminal);
     const origins = /** @type {Record<string, object>} */ (shared("along.floats.origins") ?? {});
     if (origins[terminal]) {
       delete origins[terminal];
