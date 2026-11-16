@@ -34,6 +34,9 @@ Earlier builds did not carry a version number; this log starts at 0.3.0.
   the window and leaves the terminal parked. Floats remember where they
   were dropped and reopen with the layout.
 
+- Float preparation recovers from stale shared pending markers and waits for
+  the source tab's pane list to settle before choosing a return path.
+
 ## 0.3.0 - 2026-11-04
 
 - The Machines button now sits in the top bar next to Files and Changes,

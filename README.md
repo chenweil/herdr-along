@@ -1,15 +1,16 @@
 # Along
 
-A right-click menu for Herdr's Files and Changes panels: copy a file's
-absolute path, its path relative to the panel folder or the repository root,
-or just its name. A Machines button lists the machines herdr-core knows and
-enables or disables them.
+Along adds practical file and machine tools to Herdr. Its panels add
+right-click path copying to Files and Changes plus a Machines button for
+enabling or disabling herdr-core machines. The full layout also adds explicit
+pane floating and left/right/up/down controls for returning a float to the
+workspace.
 
 Two packages, one repo:
 
 | Folder | Kind | Version | What it is |
 | --- | --- | --- | --- |
-| [`along/`](along/) | layout | 0.3.0 | The whole window: Herdr's `main` layout with Along's Files, Changes and tab bar. Machines sits in the top bar. Start here. |
+| [`along/`](along/) | layout | 0.4.0 | The complete Along window: Files, Changes, Machines and explicit pane floating controls. Start here. |
 | [`along-panels/`](along-panels/) | mod | 0.3.0 | Four mods without a layout, for a window you already arranged. Files and Changes carry their own Machines button. Files docks on the right; Changes is there for you to place. |
 
 Each folder has its own `RECIPE.md` (the brief another agent builds it from)
@@ -43,6 +44,9 @@ and each folder in `along/mods/` into `~/.config/herdr-app/mods/`, then
 restart Herdr and switch to the `along` layout. For the panels alone, copy
 `along-panels/mods/` into `~/.config/herdr-app/mods/` instead and add a block
 that shows `along-files` to your layout.
+
+Choose `along/` when you want the complete layout. Choose `along-panels/` when
+you already have a layout and only want the Files, Changes and Machines tools.
 
 ## What it runs
 

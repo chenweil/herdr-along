@@ -1,10 +1,12 @@
 # Along
 
-Along adds a right-click menu to Herdr's Files and Changes panels: copy a file's absolute path, its path relative to the panel folder or the repository root, or just its name. A Machines button in the tab bar lists your herdr-core machines and enables or disables them.
+Along adds right-click path copying to Herdr's Files and Changes panels, a
+Machines button for herdr-core machines, and explicit controls for floating a
+pane and returning it to the workspace.
 
 ![Along](preview.png)
 
-Version 0.3.0. See [CHANGELOG.md](CHANGELOG.md) for what changed.
+Version 0.4.0. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 This file is the brief: enough to build Along from an empty folder. The
 files next to it are one build of it. If they don't work on your Herdr, or you
@@ -12,9 +14,8 @@ want it different, build it again from here.
 
 ## What you see
 
-Herdr's default window, with two differences: the Files and Changes panels
-have a right-click menu, and the tab bar carries a Machines button next to
-Files and Changes.
+Herdr's default window, with Along's Files and Changes path menu, Machines
+button, and Float controls in pane headers.
 
 - **The window.** No title bar. A 268px sidebar on the left: a 46px brand
   block, the spaces list and the agents list, each at least 90px, and a 69px
