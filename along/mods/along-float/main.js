@@ -127,8 +127,12 @@ export default class Float extends View {
           this.done(terminal, overlay);
           return;
         }
+        // 优先使用当前真正聚焦的主布局 pane。点击终端内容区也会聚焦
+        // pane，但不会经过 along-pane 的 header click，因此不能只依赖 shared。
+        const focusedTarget = focused()?.pane && panes().find((p) => p.pane === focused().pane && p.tab === tab.id);
         const picked = shared("along.floats.target");
-        const target = picked && panes().find((p) => p.pane === picked.pane && p.tab === tab.id);
+        const rememberedTarget = picked && panes().find((p) => p.pane === picked.pane && p.tab === tab.id);
+        const target = focusedTarget ?? rememberedTarget;
         if (target) {
           await this.restoreAt(task, terminal, target, direction);
           this.done(terminal, overlay);

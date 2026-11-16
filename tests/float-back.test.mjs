@@ -54,7 +54,7 @@ for (const side of ['left', 'up', 'right', 'down']) {
     let pending;
     instance.back({
       spawn(body) { pending = body({ sleep: async () => {} }); }
-    });
+    }, side);
     await pending;
     assert.deepEqual(failures, [], '点击分支不应报告错误');
     assert.equal(kept, true, '应执行 terminal.keep');
