@@ -1,7 +1,7 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import * as fs from "fs/promises";
-import { appHome, closeOverlay, props, setShared, shared, theme, exec } from "herdr";
+import { appHome, closeOverlay, openOverlay, props, setShared, shared, theme, exec } from "herdr";
 
 const STORE = "along.machines.disabled";
 
@@ -57,6 +57,9 @@ export default class AlongMachines extends View {
     this.handle = cx.focus_handle();
     this.handle.focus();
     this.refresh(cx);
+    // A machine added through the machine-add dialog should appear here when it
+    // closes, without closing and reopening this one: look again while shown.
+    cx.timer.every(2000, (cx) => this.refresh(cx));
   }
 
   async list() {
@@ -123,7 +126,10 @@ export default class AlongMachines extends View {
       })
       .child(h_flex().items_center().gap(8)
         .child(div().font_semibold().flex_1().child("Machines"))
-        .child(div().text_color(t.dim).text_size(11).child("enable / disable")))
+        .child(div().text_color(t.dim).text_size(11).child("enable / disable"))
+        .child(h_flex().id("along-machines-add").px(8).py(3).rounded(5).gap(4).items_center().text_size(11).text_color(t.ansi2)
+          .cursor_pointer().hover(s => s.bg(t.hover)).on_click(() => openOverlay({ mod: "machine-add", kind: "dialog", width: 560 }))
+          .child("+ Add machine")))
       .child(v_flex().gap(4).children(list.map((machine, i) => {
         const busy = this.busy.has(machine.name);
         return h_flex().id(`along-machine-${machine.name}`).h(36).flex_none().px(9).gap(8).items_center().rounded(7)

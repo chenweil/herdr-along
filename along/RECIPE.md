@@ -1,12 +1,12 @@
 # Along
 
 Along adds right-click path copying to Herdr's Files and Changes panels, a
-Machines button for herdr-core machines, and explicit controls for floating a
-pane and returning it to the workspace.
+Machines button for herdr-core machines (with adding built into its dialog),
+and explicit controls for floating a pane and returning it to the workspace.
 
 ![Along](preview.png)
 
-Version 0.4.0. See [CHANGELOG.md](CHANGELOG.md) for what changed.
+Version 0.4.2. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 This file is the brief: enough to build Along from an empty folder. The
 files next to it are one build of it. If they don't work on your Herdr, or you
@@ -18,10 +18,12 @@ Herdr's default window, with Along's Files and Changes path menu, Machines
 button, and Float controls in pane headers.
 
 - **The window.** No title bar. A 268px sidebar on the left: a 46px brand
-  block, the spaces list and the agents list, each at least 90px, and a 69px
-  footer. A tab bar 42px tall with the terminal tabs, a `+`, and Files,
-  Changes and Machines buttons at the right, then the pane area, then a 28px
-  status bar.
+  block, the spaces list and the agents list, each at least 90px. When the
+  sidebar is collapsed, its expand button comes first in the
+  compact spaces rail, before the new-space button. A tab bar 42px tall with
+  the terminal tabs, a `+`, and Files,
+  Changes and Machines buttons at the right, then the pane area, then a
+  28px status bar.
   On the right, a panel column 368px wide (min 280, max 900), hidden until a
   panel is opened, holding Files and Changes as a stack with Files in front.
   Terminals get 14px of horizontal and 12px of vertical padding, and panes
@@ -47,8 +49,9 @@ button, and Float controls in pane headers.
   popover color and 12.8px text. Rows are 31px high with a 14px copy icon:
   "Copy Path", "Copy Relative Path", "Copy Name". A row whose value is empty
   or repeats an earlier row is dropped, so the menu can show fewer than three.
-- **The Machines dialog.** 460×360, popover color, 12px padding, 13px text. A
-  heading row "Machines" with "enable / disable" in dim 11px, then one 36px
+- **The Machines dialog.** 460×380, popover color, 12px padding, 13px text. A
+  heading row "Machines" with "enable / disable" in dim 11px and a "+ Add
+  machine" button that opens the machine-add dialog, then one 36px
   row per machine: a 7px dot (green when enabled, dim when disabled), the
   machine name, a second line with its state or "disabled" in dim 11px, and a
   "Disable" or "Enable" button in 11px.
@@ -74,7 +77,9 @@ button, and Float controls in pane headers.
 - Changes lists the repository's uncommitted files and shows the selected
   file's diff. Clicking a row opens its diff, clicking it again closes it.
 - "Machines" opens the dialog from the tab bar. It reads the machines
-  herdr-core knows with `hc machine ls --json`. "Disable" removes the machine
+  herdr-core knows with `hc machine ls --json`, again every two seconds while
+  the dialog is open, so a machine added through the heading's "+ Add
+  machine" entry appears on its own. "Disable" removes the machine
   with `hc machine rm` and keeps its profile in shared state; "Enable" adds it
   back with `hc machine add` and the saved target and session. The row shows
   "Working…" while the command runs.
@@ -91,10 +96,14 @@ button, and Float controls in pane headers.
   "along-changes" }`. The tab bar points at `along-tabs` and the pane header
   at `along-pane` instead of the shipped mods. Everything else points at
   shipped mods:
-  `workspace-chrome` (brand and footer), `spaces`, `agents`, `pane`,
+  `along-chrome` (brand), `along-spaces`, `along-agents`, `pane`,
   `workspace-status`.
-- **Six mods**, all `"place": "none"` so only the layout decides where they
+- **Ten mods**, all `"place": "none"` so only the layout decides where they
   show:
+  - `along-chrome/` — the shipped `workspace-chrome` mod with a Settings
+    button in the brand row, left of the search button; it carries the
+    update-ready dot the footer's Settings row used to show. There is no
+    footer: adding a machine lives in the Machines dialog now.
   - `along-pane/` — the shipped `pane` header mod plus a Float button: it
     probes the pane's neighbors with `pane.focus` + `pane.go` (left, up,
     right, down), records them with the source space and tab in
@@ -129,6 +138,10 @@ button, and Float controls in pane headers.
     "--json"])`, writes with `hc machine rm` and `hc machine add`, and keeps
     disabled profiles in shared state under `along.machines.disabled`. It
     migrates profiles from older per-overlay stores on first open.
+  - `along-spaces/` — the shipped `spaces` mod with the sidebar expand button
+    at the start of the compact rail.
+  - `along-agents/` — the shipped `agents` mod without the expand button that
+    used to sit at the bottom of the compact rail.
 - **Data:** `spaces()`, `panes()` and `focused()` for the folder and the
   remote machine, `theme()` for every color, `settings()` for the preview
   font, `window()` for the platform.
@@ -169,8 +182,8 @@ button, and Float controls in pane headers.
 ## Done when
 
 - `herdr-app check mods/along-files`, `mods/along-changes`, `mods/along-menu`,
-  `mods/along-machines`, `mods/along-tabs`, `mods/along-pane` and
-  `mods/along-float` pass.
+  `mods/along-machines`, `mods/along-tabs`, `mods/along-pane`, `mods/along-float`
+  and `mods/along-chrome` pass.
 - Switching to `along` (`ctrl-shift-l`, or `layout.switch along`) shows the
   sidebar, the tab bar with Machines next to Files and Changes, the terminals
   and the right panel with Files in front.

@@ -1,16 +1,17 @@
 # Along
 
 Along adds practical file and machine tools to Herdr. Its panels add
-right-click path copying to Files and Changes plus a Machines button for
-enabling or disabling herdr-core machines. The full layout also adds explicit
-pane floating and left/right/up/down controls for returning a float to the
-workspace.
+right-click path copying to Files and Changes plus a Machines button. That
+dialog lists herdr-core machines and enables or disables them, and its heading
+carries "+ Add machine" for adding a new one. The full layout also adds
+explicit pane floating and left/right/up/down controls for returning a float
+to the workspace.
 
 Two packages, one repo:
 
 | Folder | Kind | Version | What it is |
 | --- | --- | --- | --- |
-| [`along/`](along/) | layout | 0.4.0 | The complete Along window: Files, Changes, Machines and explicit pane floating controls. Start here. |
+| [`along/`](along/) | layout | 0.4.3 | The complete Along window: Files, Changes, Machines and explicit pane floating controls. Start here. |
 | [`along-panels/`](along-panels/) | mod | 0.3.0 | Four mods without a layout, for a window you already arranged. Files and Changes carry their own Machines button. Files docks on the right; Changes is there for you to place. |
 
 Each folder has its own `RECIPE.md` (the brief another agent builds it from)
@@ -56,7 +57,9 @@ files:
 - `sh` or `powershell` to list a folder, and `git` for the repository root,
   status and diffs.
 - `hc` (herdr-core) for the Machines dialog, which can remove a machine from
-  herdr-core and add it back.
+  herdr-core and add it back, and for "+ Add machine" in its heading
+  (`hc machine add`, then `hc machine ls` every two seconds while the dialog is
+  open).
 - `readTextFile` for the previews, inside the focused pane's folder.
 - **The Changes panel commits.** Its Commit button runs `git add -A` and
   `git commit -m <message>` in the repository root.

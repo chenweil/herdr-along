@@ -2,6 +2,25 @@
 
 Earlier builds did not carry a version number; this log starts at 0.3.0.
 
+## 0.4.3 - 2026-11-16
+
+- The footer is gone. The Machines button now carries machine adding too:
+  its dialog gains a "+ Add machine" entry in the heading that opens the
+  machine-add dialog, and it re-reads the machine list every two seconds
+  while open, so a machine added while it is open appears on its own.
+
+## 0.4.2 - 2026-11-16
+
+- Settings moved from the sidebar footer to the brand row: a gear button sits
+  to the left of the search button and carries the update-ready dot. The new
+  `along-chrome` mod forks the shipped `workspace-chrome`; the footer keeps
+  only "Add machine".
+
+## 0.4.1 - 2026-11-16
+
+- The sidebar expand button now appears at the top of the collapsed rail,
+  before the new-space button.
+
 ## 0.4.0 - 2026-11-13
 
 - The float drop design is explicit rather than coordinate-based. Herdr's

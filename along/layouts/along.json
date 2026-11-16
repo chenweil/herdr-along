@@ -35,7 +35,7 @@
           },
           "window_drag": true,
           "content": {
-            "mod": "workspace-chrome"
+            "mod": "along-chrome"
           }
         },
         {
@@ -50,7 +50,7 @@
               },
               "min": 90,
               "content": {
-                "mod": "spaces"
+                "mod": "along-spaces"
               }
             },
             {
@@ -61,23 +61,10 @@
               },
               "min": 90,
               "content": {
-                "mod": "agents"
+                "mod": "along-agents"
               }
             }
           ]
-        },
-        {
-          "id": "sidebar-footer",
-          "type": "block",
-          "size": {
-            "px": 69
-          },
-          "content": {
-            "mod": "workspace-chrome",
-            "props": {
-              "footer": true
-            }
-          }
         }
       ]
     },

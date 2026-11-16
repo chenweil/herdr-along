@@ -91,7 +91,7 @@ export default class Tabs extends View {
     };
     const machinesButton = h_flex().id("panel-machines").h(26).px(8).flex_none().items_center().rounded(6)
       .text_size(12).text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).on_mouse_down("left", stop)
-      .on_click(() => openOverlay({ mod: "along-machines", kind: "dialog", width: 460, height: 360 }))
+      .on_click(() => openOverlay({ mod: "along-machines", kind: "dialog", width: 460, height: 380 }))
       .child("Machines");
     return h_flex().size_full().min_w(0).px(10).pl(lightsPadding).gap(3).items_center().bg(t.chrome).border_b(1).border_color(t.border)
       .on_mouse_up("left", () => { this.pressed = null; })
