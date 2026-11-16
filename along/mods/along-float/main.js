@@ -7,7 +7,7 @@
 
 import { View, div, image, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { agents, terminals, panes, spaces, run, theme, props, closeOverlay, shared, setShared, notify } from "herdr";
+import { agents, terminals, panes, spaces, focused, run, theme, props, closeOverlay, shared, setShared, notify } from "herdr";
 
 const SPIN = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const WORDS = { working: "working", blocked: "needs you", done: "finished", idle: "idle" };
