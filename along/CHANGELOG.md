@@ -2,6 +2,22 @@
 
 Earlier builds did not carry a version number; this log starts at 0.3.0.
 
+## 0.4.4 - 2026-11-16
+
+- Spaces and agents are one list now. Each space's row is followed by its own
+  agents: program icon (folds the sub-agent tree), name, machine when remote,
+  and a state mark — spinner while working, red `!` when blocked, dot when
+  done, ring when idle. The sidebar's separate Agents section is gone from
+  the layout, and with it the priority/grouped sort menu.
+- Indentation follows the space's own level: a main checkout's agents sit at
+  32px, a worktree's at 46px (one level past its branch icon), sub-agents one
+  step deeper again (50px / 64px). A worktree keeps its place after the main
+  checkout's agents and carries its own agents one level deeper.
+- Agents sort pinned-first, then urgent-first, most recent change breaking
+  ties; `setAgentOrder` is called in the spaces' order so keyboard navigation
+  keeps working. Agents of no listed space gather at the end under
+  "Elsewhere". The collapsed rail shows spaces only.
+
 ## 0.4.3 - 2026-11-16
 
 - The footer is gone. The Machines button now carries machine adding too:

@@ -52,17 +52,6 @@
               "content": {
                 "mod": "along-spaces"
               }
-            },
-            {
-              "id": "agents",
-              "type": "block",
-              "size": {
-                "weight": 1
-              },
-              "min": 90,
-              "content": {
-                "mod": "along-agents"
-              }
             }
           ]
         }

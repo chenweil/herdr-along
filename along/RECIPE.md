@@ -3,10 +3,12 @@
 Along adds right-click path copying to Herdr's Files and Changes panels, a
 Machines button for herdr-core machines (with adding built into its dialog),
 and explicit controls for floating a pane and returning it to the workspace.
+Its sidebar puts each space's agents under the space's own row, one list with
+a state mark per agent.
 
 ![Along](preview.png)
 
-Version 0.4.2. See [CHANGELOG.md](CHANGELOG.md) for what changed.
+Version 0.4.4. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 This file is the brief: enough to build Along from an empty folder. The
 files next to it are one build of it. If they don't work on your Herdr, or you
@@ -18,7 +20,8 @@ Herdr's default window, with Along's Files and Changes path menu, Machines
 button, and Float controls in pane headers.
 
 - **The window.** No title bar. A 268px sidebar on the left: a 46px brand
-  block, the spaces list and the agents list, each at least 90px. When the
+  block, then one spaces list (at least 90px) that carries each space's agents
+  under its row. When the
   sidebar is collapsed, its expand button comes first in the
   compact spaces rail, before the new-space button. A tab bar 42px tall with
   the terminal tabs, a `+`, and Files,
@@ -83,8 +86,29 @@ button, and Float controls in pane headers.
   with `hc machine rm` and keeps its profile in shared state; "Enable" adds it
   back with `hc machine add` and the saved target and session. The row shows
   "Working…" while the command runs.
-- Nothing animates, and Along shows no agent status: the spaces and agents
-  lists are the shipped ones.
+- Nothing animates. The spaces list is the shipped `spaces` mod plus the
+  agents list folded into it: every space's row is followed by its own
+  agents.
+
+## Spaces and agents in one list
+
+- Each space's row is followed by its agents: the program icon (it folds the
+  agent's sub-agent tree when clicked), the agent's name (its own title, else
+  the tab's), the machine name when remote, and a small state mark — a
+  spinner while working, a red `!` when blocked, a dot when done, an open
+  ring when idle. Clicking a row focuses the agent's pane; clicking an icon
+  of a sub-agent without a pane peeks at it.
+- Indentation follows the space's own: a main checkout's row sits at 8px so
+  its agents go to 32px and their sub-agents to 50px; a worktree's row sits
+  at 22px past its branch icon, so its agents go to 46px and their
+  sub-agents to 64px. A worktree row keeps its place after the main
+  checkout's agents and carries its own agents one level deeper.
+- Agents sort pinned-first, then urgent-first (blocked, done, working, idle),
+  the most recent change breaking ties. Agents of no listed space (a machine
+  away, or a space that closed under them) gather at the end under
+  "Elsewhere", each named by its space. The collapsed rail shows spaces
+  only, as before. The standalone agents list is gone: the layout no longer
+  mounts `along-agents`, and the priority/grouped sort menu went with it.
 
 ## Built from
 
@@ -96,7 +120,7 @@ button, and Float controls in pane headers.
   "along-changes" }`. The tab bar points at `along-tabs` and the pane header
   at `along-pane` instead of the shipped mods. Everything else points at
   shipped mods:
-  `along-chrome` (brand), `along-spaces`, `along-agents`, `pane`,
+  `along-chrome` (brand), `along-spaces` (spaces with their agents), `pane`,
   `workspace-status`.
 - **Ten mods**, all `"place": "none"` so only the layout decides where they
   show:
@@ -139,11 +163,17 @@ button, and Float controls in pane headers.
     disabled profiles in shared state under `along.machines.disabled`. It
     migrates profiles from older per-overlay stores on first open.
   - `along-spaces/` — the shipped `spaces` mod with the sidebar expand button
-    at the start of the compact rail.
+    at the start of the compact rail, and the agents list folded in: each
+    space's row is followed by its agents (see "Spaces and agents in one
+    list"). It reads `agents()`, `terminals()` and `focused()`, sorts with
+    the agents list's urgency ranking, and calls `setAgentOrder` in the
+    spaces' order so keyboard navigation keeps working.
   - `along-agents/` — the shipped `agents` mod without the expand button that
-    used to sit at the bottom of the compact rail.
+    used to sit at the bottom of the compact rail. No longer mounted by the
+    layout; kept in the repo for reference and possible return.
 - **Data:** `spaces()`, `panes()` and `focused()` for the folder and the
-  remote machine, `theme()` for every color, `settings()` for the preview
+  remote machine, `agents()` and `terminals()` for the agents under each
+  space, `theme()` for every color, `settings()` for the preview
   font, `window()` for the platform.
 - **Commands and programs:** `openOverlay` and `closeOverlay`; `exec("sh")`
   or `exec("powershell")` to list a folder; `exec("git")` for the root,

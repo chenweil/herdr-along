@@ -1,11 +1,14 @@
 // Workspace spaces: stable colored avatars, worktrees under their checkout,
 // grouped by machine when more than one is known. After a space's name, the repo
-// its first terminal is in now, only where unusual: branch, ahead/behind. Agent state lives in the agents list, not here. Click to
-// switch, right-click for its menu, drag to reorder.
+// its first terminal is in now, only where unusual: branch, ahead/behind.
+// Each space carries its own agents under its row: program icon, name, machine
+// when remote, and a state mark; a worktree's agents sit one level past its
+// branch icon. Agents of no listed space (a machine away) gather under
+// "Elsewhere". Click to switch, right-click for its menu, drag to reorder.
 
-import { View, div, svg } from "gpui-kit";
+import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, ScrollHandle } from "gpui-base";
-import { spaces, machines, panes, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout } from "herdr";
+import { spaces, machines, agents, terminals, focused, panes, run, openOverlay, exec, hc, theme, shared, setShared, setAgentOrder, watchFolder, window, layout } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -61,6 +64,18 @@ async function both(a, b) {
 // that draws space avatars): one strong color per hue, light and dark alike.
 const MARK = { ansi6: "#22a99a", ansi3: "#e3814f", ansi4: "#5b8def", ansi5: "#8b7cf6", ansi2: "#3fae6a", ansi1: "#d9649a" };
 
+// Agents sort urgent-first inside their space; pinned ones always first.
+const RANK = { blocked: 4, done: 3, working: 2, idle: 1 };
+// A sub-agent without a pane isn't in agents(): its raw word, error counting as
+// blocked. It's never done: it reports to its parent, and the parent's done is the news.
+const kidStatus = (k, listed) => {
+  const s = listed.get(k.address) ?? k.status;
+  return s === "error" ? "blocked" : s === "done" ? "idle" : s;
+};
+// Drop what an agent puts before its title: a status glyph or spinner and the
+// separator after it ("✦  Working"), and Codex's blinking "[ ! ] " / "[ . ] " mark.
+const clean = (s) => (s ?? "").replace(/^[^\p{L}\p{N}\p{Ps}\p{Pi}]+/u, "").replace(/^\[ [!.] \] /, "").trim();
+
 // A space speaks up only when something in it needs you.
 export function glyph(status) {
   return status === "blocked" || status === "done" ? "●" : "·";
@@ -86,6 +101,12 @@ export default class Spaces extends View {
     this.born = {};
     this.pressed = null;
     this.over = null;
+    // Sub-agent trees fold per parent agent, like the agents list did.
+    this.agentFolded = new Set();
+    this.bySpace = new Map(); // space id -> its top-level agents, sorted urgent-first
+    this.orphans = []; // agents of spaces not in the list (a machine away)
+    this.listed = new Map(); // agent address -> its raw status, for kidStatus
+    this.shownAgent = null; // the focused agent's address, highlighted in its space
     this.scroll = ScrollHandle.new(); // the list's position: the active space is brought into view through it
     this.activeAt = -1; // the active space's place among the list's children (headers and rows), -1 when not drawn
     this.machines = [];
@@ -95,6 +116,10 @@ export default class Spaces extends View {
       for (const state of Object.values(this.reconnecting)) state.busy = false;
     } catch { this.reconnecting = {}; }
     try { this.folded = new Set(JSON.parse(localStorage.getItem("machines.folded") ?? "[]")); } catch { this.folded = new Set(); }
+    // Where each agent sat while it was live: a parked one (a float, "Send
+    // back") has no pane, so agents() drops it and this is the only home left.
+    try { this.homes = JSON.parse(localStorage.getItem("agent.homes") ?? "{}"); } catch { this.homes = {}; }
+    if (!this.homes || typeof this.homes !== "object" || Array.isArray(this.homes)) this.homes = {};
     this.refreshMachines(cx);
     cx.timer.every(15000, cx => this.refreshMachines(cx));
     // Refresh only when the refs could have changed (see `due`).
@@ -293,6 +318,107 @@ export default class Spaces extends View {
     });
   }
 
+  // The agent's icon from the app's program table: a one-color glyph or a picture.
+  agentIcon(p, size, color) {
+    if (!p?.icon) return null;
+    return p.tint ? svg(p.icon).size(size).flex_none().text_color(color) : image(p.icon).w(size).h(size).flex_none();
+  }
+
+  // A small state mark: spinner while working, a red ! when blocked, a dot when
+  // done, an open ring when idle. Compact, so it fits under a space's row.
+  agentStatus(t, a) {
+    if (a.status === "working") return svg("mods/workspace-chrome/spinner.svg").size(12).mx(1).flex_none().text_color(t.working).spin(900);
+    if (a.status === "blocked") return div().size(14).flex_none().rounded(4).bg(t.blocked + "26").text_size(10.5).font_bold().text_color(t.blocked).flex().items_center().justify_center().child("!");
+    if (a.status === "done") return div().size(7).mx(3).flex_none().rounded(4).bg(t[a.status] ?? t.ansi2);
+    return div().size(7).mx(3).flex_none().rounded(4).border(1.5).border_color(t.idle ?? t.dim);
+  }
+
+  // Live sub-agents of `addr`, depth first, each with the tree lines in front of it.
+  subTree(all, addr, lead = []) {
+    const kids = all.filter((k) => k.parent === addr && k.state === "live");
+    return kids.flatMap((k, i) => {
+      const last = i === kids.length - 1;
+      return [
+        { t: k, lines: [...lead, last ? "└" : "├"] },
+        ...this.subTree(all, k.address, [...lead, last ? "" : "│"]),
+      ];
+    });
+  }
+
+  subRow(t, s, pl) {
+    const k = s.t;
+    const st = kidStatus(k, this.listed);
+    const pic = this.agentIcon(k.program, 12, t.foreground);
+    const on = this.shownAgent === k.address;
+    return h_flex()
+      .id(`ag-sub-${k.address}`)
+      .pl(pl)
+      .pr(8)
+      .h(22)
+      .flex_none()
+      .gap(0)
+      .items_center()
+      .rounded(6)
+      .text_size(11.5)
+      .when(on, (el) => el.bg(t.raised))
+      .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
+      .on_click(() => (this.listed.has(k.address) ? run("pane.focus", { terminal: k.address }) : run("terminal.peek", { terminal: k.address })))
+      .children(s.lines.map(l => div().self_start().mt(-4).w(9).h(15).mr(4).flex_none()
+        .when(Boolean(l), el => el.border_l(1.5).border_color(t.input))
+        .when(l === "└" || l === "├", el => el.border_b(1.5).rounded_bl(6))))
+      .when(Boolean(pic), el => el.child(div().mr(7).child(pic)))
+      .child(div().flex_1().min_w(0).truncate().text_color(on ? t.foreground : t.muted).child(k.name || k.template || k.program?.name || k.address.split("/").pop()))
+      .child(this.agentStatus(t, { status: st }));
+  }
+
+  // One agent under its space's row. `tree`: the space is a worktree, whose row
+  // already sits at pl 22 past its branch icon, so its agents go deeper; a main
+  // checkout's row sits at pl 8, so its agents go to 32.
+  agentRow(t, a, tree, name) {
+    const pic = this.agentIcon(a.program, 14, t.foreground);
+    const on = this.shownAgent === a.address;
+    const machine = a.address.includes("/") ? a.address.split("/")[0] : null;
+    const subs = a.kids?.length ?? 0;
+    return h_flex()
+      .id(`ag-${a.address}`)
+      .pl(tree ? 46 : 32)
+      .pr(8)
+      .h(24)
+      .flex_none()
+      .rounded(6)
+      .items_center()
+      .gap(7)
+      .text_size(12)
+      .when(on, (el) => el.bg(t.selected))
+      .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
+      .on_click(() => (a.parked ? run("terminal.keep", { terminal: a.address }) : run("pane.focus", { pane: a.pane })))
+      .when(Boolean(pic), el => el.child(div().id(`ag-fold-${a.address}`)
+        .when(subs > 0, el => el.on_click((_e, cx) => {
+          cx.stop_propagation();
+          this.agentFolded.has(a.address) ? this.agentFolded.delete(a.address) : this.agentFolded.add(a.address);
+          cx.notify();
+        }))
+        .child(pic)))
+      .child(div().flex_1().min_w(0).truncate().text_color(a.status === "idle" && !on ? t.muted : t.foreground).child(name ?? a.rowName))
+      .when(Boolean(machine), el => el.child(div().flex_none().text_size(10).text_color(t.dim).child(machine)))
+      .when(Boolean(a.parked), el => el.child(div().flex_none().text_size(11).text_color(t.dim).tooltip("Floated · click to bring it back").child("⤢")))
+      .when(subs > 0 && this.agentFolded.has(a.address), el => el.child(div().flex_none().text_size(10.5).text_color(t.dim).child(String(subs))))
+      .child(this.agentStatus(t, a));
+  }
+
+  // The rows under one space's row: each agent, then its live sub-agents unless folded.
+  agentRows(w, tree, t) {
+    const list = this.bySpace.get(w.id);
+    if (!list?.length) return [];
+    const pl = tree ? 64 : 50;
+    const rows = [];
+    for (const a of list) {
+      rows.push(this.agentRow(t, a, tree));
+      if (!this.agentFolded.has(a.address)) for (const s of a.kids ?? []) rows.push(this.subRow(t, s, pl));
+    }
+    return rows;
+  }
+
   menu(w) {
     // A popup is as tall as its items; height is only the most.
     openOverlay({ mod: "menu", kind: "popup", width: 200, height: 260, props: { tab: "space", target: { id: w.id } } });
@@ -346,7 +472,9 @@ export default class Spaces extends View {
   // The rows, under a header per machine once one isn't this computer.
   grouped(t, collapsed) {
     const rows = this.ordered();
-    const draw = (r) => (collapsed ? this.compact(r, t) : this.row(r, t));
+    // Each space's row, then its agents; a worktree row keeps its place after
+    // the main checkout's agents and carries its own agents one level deeper.
+    const draw = (r) => (collapsed ? [this.compact(r, t)] : [this.row(r, t), ...this.agentRows(r.w, r.tree, t)]);
     // Where the active space's row lands among the children this returns: the list scrolls by its direct
     // children, and machine headers, login notes and loading rows count too.
     this.activeAt = -1;
@@ -361,10 +489,10 @@ export default class Spaces extends View {
     if (!remote.length) {
       if (loading(null) && !rows.length) return [loadingRow(null)];
       this.activeAt = rows.findIndex(r => r.w.active);
-      return rows.map(draw);
+      return rows.flatMap(draw);
     }
     const machineNames = [null, ...remote];
-    return machineNames.flatMap((m) => {
+    const list = machineNames.flatMap((m) => {
       const mine = rows.filter((r) => (r.w.machine ?? null) === m);
       const repair = this.reconnecting[m];
       const machine = this.machines.find(k => k.name === m) ?? repair?.machine;
@@ -418,12 +546,19 @@ export default class Spaces extends View {
             .text_size(11).text_color(t.foreground).bg(t.raised).cursor_pointer().hover(s => s.bg(t.hover))
             .on_click((_e, cx) => { cx.stop_propagation(); cx.write_to_clipboard(login); this.copiedLogin = login; cx.notify(); })
             .child(this.copiedLogin === login ? "Copied" : "Copy")))] : [];
-      const items = [cell(head), ...guidance, ...(folded ? [] : mine.length ? mine.map(draw) : [loading(m) ? loadingRow(m) : cell(empty)])];
+      const items = [cell(head), ...guidance, ...(folded ? [] : mine.length ? mine.flatMap(draw) : [loading(m) ? loadingRow(m) : cell(empty)])];
       const first = folded ? -1 : mine.findIndex(r => r.w.active);
       if (first >= 0) this.activeAt = before + 1 + guidance.length + first;
       before += items.length;
       return items;
     });
+    // Agents of no listed space: a machine away, or a space that closed under
+    // them. Gathered at the end, each still named by its space.
+    if (!collapsed && this.orphans.length) {
+      const head = h_flex().id("agents-elsewhere").px(8).pt(8).h(26).flex_none().items_center().text_size(11).text_color(t.dim).child("Elsewhere");
+      list.push(head, ...this.orphans.map(a => this.agentRow(t, a, false, `${a.space_name ? `${a.space_name} · ` : ""}${a.rowName}`)));
+    }
+    return list;
   }
 
   // Only what's unusual, after the name: "herdr \u00b7 spike \u21912 \u21931". The repo or
@@ -507,19 +642,37 @@ export default class Spaces extends View {
   }
 
   compact({ w, i }, t) {
-    return railCell(h_flex()
+    // The rail has no room for agent rows: the space's cell carries a strip of
+    // mini marks at its bottom instead, at most eight in two rows of four,
+    // urgent ones first (a blocked agent shows even when more sit behind it).
+    // Idle dots are dim; working spins; done is a dot in the theme's done color.
+    const ags = [...(this.bySpace.get(w.id) ?? [])].sort((x, y) => (RANK[y.status] ?? 0) - (RANK[x.status] ?? 0));
+    const marks = ags.slice(0, 8).map((a) => a.status === "working"
+      ? svg("mods/workspace-chrome/spinner.svg").size(8).flex_none().text_color(t.working).spin(900)
+      : div().size(5).flex_none().rounded(2.5).bg(a.status === "idle" ? t.dim : (t[a.status] ?? t.dim)));
+    const rows = [];
+    for (let n = 0; n < marks.length; n += 4) rows.push(marks.slice(n, n + 4));
+    return railCell(v_flex()
       .id(`space-${w.id}`)
-      .relative()
       .w(RAIL_CELL)
-      .h(26)
+      .h(rows.length > 1 ? 34 : 26)
       .rounded(6)
-      .justify_center()
-      .items_center()
       .when(w.active, (el) => el.bg(t.selected))
       .when(!w.active, (el) => el.hover((s) => s.bg(t.hover)))
       .on_click(() => run("space.select", { id: w.id }))
-      .child(div().text_color(w.active ? t.foreground : t.muted).child(String(i + 1)))
-      .child(div().absolute().right(5).text_color(tone(t, w.status)).child(glyph(w.status))));
+      .child(h_flex()
+        .flex_1()
+        .relative()
+        .items_center()
+        .justify_center()
+        .child(div().text_color(w.active ? t.foreground : t.muted).child(String(i + 1)))
+        .child(div().absolute().right(5).text_color(tone(t, w.status)).child(glyph(w.status))))
+      .when(rows.length > 0, (el) => el.child(v_flex()
+        .flex_none()
+        .pb(3)
+        .gap(2)
+        .items_center()
+        .children(rows.map((row) => h_flex().flex_none().gap(2).items_center().justify_center().children(row))))));
   }
 
   render() {
@@ -537,6 +690,79 @@ export default class Spaces extends View {
       changed = true;
     }
     if (changed) setShared("space.colors", kept);
+    // Agents by space, each render: top-level agents under their space's row,
+    // sub-agents kept in their parent's tree (agentRows). Pinned ones first,
+    // then urgent-first, most recent change breaking ties. Each agent carries
+    // its kids and row name here, so the row methods stay cheap.
+    const ags = [...agents()];
+    const all = terminals();
+    this.shownAgent = focused()?.agent;
+    // A parked agent's terminal has no pane, so agents() drops it and it would
+    // vanish from its space. The float bar records the source space and tab in
+    // along.floats.origins while it floats (dismissed with the window), and
+    // agent.homes remembers where every live agent sat: recover parked agents
+    // from either, so they stay in the list until brought back.
+    const homes = this.homes;
+    for (const a of ags) {
+      if (!a.space) continue;
+      if (homes[a.address]?.space !== a.space) homes[a.address] = { space: a.space, name: a.space_name ?? "" };
+    }
+    const origins = shared("along.floats.origins") ?? {};
+    const shown = new Set(ags.map((a) => a.address));
+    const paneTerminals = new Set(panes().map((p) => p.terminal).filter(Boolean));
+    for (const tr of all) {
+      // Finished programs and sub-agents (drawn in their parent's tree) stay
+      // out; a terminal still shown somewhere isn't parked.
+      if (shown.has(tr.address) || tr.state === "finished" || tr.parent) continue;
+      if (!tr.program?.agent && !tr.status) continue;
+      if (paneTerminals.has(tr.address)) continue;
+      const o = origins[tr.address];
+      const home = o?.space ? { space: o.space, name: o.spaceName ?? "" } : homes[tr.address];
+      ags.push({
+        address: tr.address,
+        pane: null,
+        space: home?.space ?? null,
+        space_name: home?.name ?? "",
+        tab: o?.tab,
+        tab_name: o?.tabName ?? "",
+        status: tr.status ?? "idle",
+        app: tr.app ?? null,
+        program: tr.program,
+        title: tr.title ?? tr.name ?? "",
+        seq: 0,
+        pinned: Boolean(tr.labels?.["herdr.pinned"]),
+        focused: false,
+        parked: true,
+      });
+    }
+    // Homes of terminals that are gone are dead weight.
+    const known = new Set(all.map((tr) => tr.address));
+    const saved = JSON.stringify(homes);
+    for (const addr of Object.keys(homes)) if (!known.has(addr)) delete homes[addr];
+    if (JSON.stringify(homes) !== saved) localStorage.setItem("agent.homes", JSON.stringify(homes));
+    this.listed = new Map(ags.map((a) => [a.address, a.status]));
+    const nested = new Set();
+    for (const a of ags) for (const s of this.subTree(all, a.address)) nested.add(s.t.address);
+    const tabNames = new Map(sp.flatMap(s => s.tabs).map(tb => [tb.id, tb.name]));
+    const nameOf = (a) => clean(a.title) || tabNames.get(a.tab) || a.program?.name || a.address.split("/").pop();
+    this.bySpace = new Map();
+    this.orphans = [];
+    for (const a of ags) {
+      // A kept sub-agent (one with a pane) is in agents() too: where its
+      // parent's tree shows it, it gets no row of its own, unless pinned.
+      if (!a.pinned && nested.has(a.address)) continue;
+      a.kids = this.subTree(all, a.address);
+      a.rowName = nameOf(a);
+      if (ids.has(a.space)) {
+        if (!this.bySpace.has(a.space)) this.bySpace.set(a.space, []);
+        this.bySpace.get(a.space).push(a);
+      } else this.orphans.push(a);
+    }
+    const rank = (a) => (a.pinned ? 5 : RANK[a.status] ?? 0);
+    const byUrgency = (x, y) => rank(y) - rank(x) || y.seq - x.seq;
+    for (const l of this.bySpace.values()) l.sort(byUrgency);
+    this.orphans.sort(byUrgency);
+    setAgentOrder([...sp.flatMap(s => this.bySpace.get(s.id) ?? []), ...this.orphans].map(a => a.address));
     const list = this.grouped(t, collapsed);
     // Bring the active space into view when it, or its place in the list, changes; a row already in view stays put.
     const active = sp.find(p => p.active)?.id;
