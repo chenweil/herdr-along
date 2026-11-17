@@ -12,6 +12,13 @@ import { agents, terminals, panes, spaces, focused, run, theme, props, closeOver
 const SPIN = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const WORDS = { working: "working", blocked: "needs you", done: "finished", idle: "idle" };
 
+// A name given to the pane or its agent row (along.names), so the float bar
+// reads the same as both.
+function customName(address) {
+  const all = shared("along.names");
+  return address && all && typeof all === "object" && !Array.isArray(all) ? all[`t:${address}`] ?? "" : "";
+}
+
 function icon(p, size, color) {
   if (!p?.icon) return null;
   return p.tint ? svg(p.icon).size(size).flex_none().text_color(color) : image(p.icon).w(size).h(size).flex_none();
@@ -294,7 +301,7 @@ export default class Float extends View {
       .text_size(12)
       .child(div().w(12).flex_none().text_color(t[st] ?? t.dim).when(st === "working", (el) => el.frames(SPIN, 90)).child(glyph))
       .when(Boolean(pic), (el) => el.child(pic))
-      .child(div().truncate().font_semibold().text_color(t.foreground).child(k?.name || k?.template || k?.program?.name || terminal || ""))
+      .child(div().truncate().font_semibold().text_color(t.foreground).child(customName(terminal) || k?.name || k?.template || k?.program?.name || terminal || ""))
       .when(Boolean(st), (el) => el.child(div().flex_none().text_color(t[st] ?? t.dim).child(WORDS[st] ?? st)))
       .child(div().flex_1())
       .child(this.button(t, "drop", "", (_e, cx) => this.back(cx), "back", pending)

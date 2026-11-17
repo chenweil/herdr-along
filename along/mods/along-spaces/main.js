@@ -7,7 +7,7 @@
 // "Elsewhere". Click to switch, right-click for its menu, drag to reorder.
 
 import { View, div, image, svg } from "gpui-kit";
-import { v_flex, h_flex, ScrollHandle } from "gpui-base";
+import { v_flex, h_flex, ScrollHandle, InputState, Input } from "gpui-base";
 import { spaces, machines, agents, terminals, focused, panes, run, openOverlay, exec, hc, theme, shared, setShared, setAgentOrder, watchFolder, window, layout, knownAgents } from "herdr";
 
 function find(node, id) {
@@ -80,6 +80,24 @@ const kidStatus = (k, listed) => {
 // separator after it ("✦  Working"), and Codex's blinking "[ ! ] " / "[ . ] " mark.
 const clean = (s) => (s ?? "").replace(/^[^\p{L}\p{N}\p{Ps}\p{Pi}]+/u, "").replace(/^\[ [!.] \] /, "").trim();
 
+// Custom names live in shared state (see along-pane): keyed by terminal
+// address, so a renamed pane header and its agent row read the same name.
+const NAMES = "along.names";
+function nameMap() {
+  const raw = shared(NAMES);
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+}
+function customName(address) {
+  return address ? (nameMap()[`t:${address}`] ?? "") : "";
+}
+function saveName(address, text) {
+  if (!address) return;
+  const all = nameMap();
+  const cleanText = (text ?? "").trim();
+  if (cleanText) all[`t:${address}`] = cleanText; else delete all[`t:${address}`];
+  setShared(NAMES, all);
+}
+
 // A space speaks up only when something in it needs you.
 export function glyph(status) {
   return status === "blocked" || status === "done" ? "●" : "·";
@@ -114,6 +132,11 @@ export default class Spaces extends View {
     this.scroll = ScrollHandle.new(); // the list's position: the active space is brought into view through it
     this.activeAt = -1; // the active space's place among the list's children (headers and rows), -1 when not drawn
     this.machines = [];
+    // Right-clicking an agent row edits its name in place. Each edit gets its
+    // own input state, so a blur from the row being replaced can't commit the
+    // row that just took its place.
+    this.handle = cx.focus_handle();
+    this.renaming = null; // { address, input } while a row's name is edited
     try {
       this.reconnecting = JSON.parse(localStorage.getItem("machines.reconnecting") ?? "{}");
       if (!this.reconnecting || typeof this.reconnecting !== "object" || Array.isArray(this.reconnecting)) this.reconnecting = {};
@@ -431,6 +454,10 @@ export default class Spaces extends View {
       .when(on, (el) => el.bg(t.selected))
       .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
       .on_click(() => (a.parked ? run("terminal.keep", { terminal: a.address }) : run("pane.focus", { pane: a.pane })))
+      .on_mouse_down("right", (_e, cx) => {
+        cx.stop_propagation();
+        this.beginRename(a, cx);
+      })
       .when(Boolean(pic), el => el.child(div().id(`ag-fold-${a.address}`)
         .when(subs > 0, el => el.on_click((_e, cx) => {
           cx.stop_propagation();
@@ -438,7 +465,20 @@ export default class Spaces extends View {
           cx.notify();
         }))
         .child(pic)))
-      .child(div().flex_1().min_w(0).truncate().text_color((a.status == null || a.status === "idle") && !on ? t.muted : t.foreground).child(name ?? a.rowName))
+      .when(this.renaming?.address === a.address, el => el.child(div()
+        .flex_1()
+        .min_w(0)
+        .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+        .child(Input.new(this.renaming.input)
+          .h(20)
+          .px(4)
+          .rounded(4)
+          .border(1)
+          .border_color(t.accent)
+          .bg(t.background)
+          .text_size(12)
+          .text_color(t.foreground))))
+      .when(this.renaming?.address !== a.address, el => el.child(div().flex_1().min_w(0).truncate().text_color((a.status == null || a.status === "idle") && !on ? t.muted : t.foreground).tooltip("Right-click to rename").child(name ?? a.rowName)))
       .when(Boolean(machine), el => el.child(div().flex_none().text_size(10).text_color(t.dim).child(machine)))
       .when(Boolean(a.parked), el => el.child(div().flex_none().text_size(11).text_color(t.dim).tooltip("Floated · click to bring it back").child("⤢")))
       .when(subs > 0 && this.agentFolded.has(a.address), el => el.child(div().flex_none().text_size(10.5).text_color(t.dim).child(String(subs))))
@@ -456,6 +496,28 @@ export default class Spaces extends View {
       if (!this.agentFolded.has(a.address)) for (const s of a.kids ?? []) rows.push(this.subRow(t, s, pl));
     }
     return rows;
+  }
+
+  beginRename(a, cx) {
+    const input = InputState.new({ value: customName(a.address) || a.rowName || "", placeholder: "Agent name" });
+    this.renaming = { address: a.address, input };
+    input.on("submit", (_e, cx) => this.commitRename(cx));
+    input.on("blur", (_e, cx) => { if (this.renaming?.input === input) this.commitRename(cx); });
+    cx.notify();
+    input.focus();
+  }
+
+  commitRename(cx) {
+    const r = this.renaming;
+    if (!r) return;
+    saveName(r.address, r.input.value());
+    this.renaming = null;
+    cx.notify();
+  }
+
+  cancelRename(cx) {
+    this.renaming = null;
+    cx.notify();
   }
 
   menu(w) {
@@ -798,7 +860,7 @@ export default class Spaces extends View {
       // parent's tree shows it, it gets no row of its own, unless pinned.
       if (!a.pinned && nested.has(a.address)) continue;
       a.kids = this.subTree(all, a.address);
-      a.rowName = nameOf(a);
+      a.rowName = customName(a.address) || nameOf(a);
       if (ids.has(a.space)) {
         if (!this.bySpace.has(a.space)) this.bySpace.set(a.space, []);
         this.bySpace.get(a.space).push(a);
@@ -818,6 +880,13 @@ export default class Spaces extends View {
       if (this.activeAt >= 0) this.scroll.scroll_to_item(this.activeAt);
     }
     return v_flex().size_full().min_h(0).bg(t.chrome).text_size(13)
+      .track_focus(this.handle)
+      .on_key_down((e, cx) => {
+        if (this.renaming && e.key === "escape") {
+          cx.stop_propagation();
+          this.cancelRename(cx);
+        }
+      })
       .child(h_flex().h(31).pl(16).pr(10).items_center().justify_between().text_size(11.5).text_color(t.dim)
         .when(collapsed, el => el.pl(0).pr(0).gap(3).justify_center())
         .when(!collapsed, el => el.child("Spaces"))

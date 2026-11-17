@@ -2,13 +2,13 @@
 
 Along adds right-click path copying to Herdr's Files and Changes panels, a
 Machines button for herdr-core machines (with adding built into its dialog),
-and explicit controls for floating a pane and returning it to the workspace.
-Its sidebar puts each space's agents under the space's own row, one list with
-a state mark per agent.
+and explicit controls for floating a pane and returning it to the workspace,
+and names for panes and their agents. Its sidebar puts each space's agents
+under the space's own row, one list with a state mark per agent.
 
 ![Along](preview.png)
 
-Version 0.4.5. See [CHANGELOG.md](CHANGELOG.md) for what changed.
+Version 0.4.6. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 This file is the brief: enough to build Along from an empty folder. The
 files next to it are one build of it. If they don't work on your Herdr, or you
@@ -17,7 +17,7 @@ want it different, build it again from here.
 ## What you see
 
 Herdr's default window, with Along's Files and Changes path menu, Machines
-button, and Float controls in pane headers.
+button, and Float controls and click-to-rename names in pane headers.
 
 - **The window.** No title bar. A 268px sidebar on the left: a 46px brand
   block, then one spaces list (at least 90px) that carries each space's agents
@@ -105,6 +105,12 @@ button, and Float controls in pane headers.
   something else to change. The focused agent's row is highlighted.
 - An agent is listed under the space its own pane is in; a floated one
   (a float, "Send back") keeps the space it was parked from.
+- A name given to a pane or an agent row reads the same in both places and
+  in the float bar. A click on the pane header's name, or a right-click on
+  an agent row, edits it in place: Enter saves, Escape cancels, clicking
+  away keeps the text. Names live in `shared("along.names")`, keyed by the
+  terminal's address (`t:<address>`) or the pane (`p:<pane>`); clearing one
+  restores the automatic name.
 - Indentation follows the space's own: a main checkout's row sits at 8px so
   its agents go to 32px and their sub-agents to 50px; a worktree's row sits
   at 22px past its branch icon, so its agents go to 46px and their
@@ -135,8 +141,10 @@ button, and Float controls in pane headers.
     button in the brand row, left of the search button; it carries the
     update-ready dot the footer's Settings row used to show. There is no
     footer: adding a machine lives in the Machines dialog now.
-  - `along-pane/` — the shipped `pane` header mod plus a Float button: it
-    probes the pane's neighbors with `pane.focus` + `pane.go` (left, up,
+  - `along-pane/` — the shipped `pane` header mod plus a Float button and an
+    in-place rename input: the name it shows is `shared("along.names")`'s
+    entry for the pane, else the program's or the terminal's own. It probes
+    the pane's neighbors with `pane.focus` + `pane.go` (left, up,
     right, down), records them with the source space and tab in
     `shared("along.floats.origins")`, then parks the pane's terminal with
     `terminal.park` (the terminal keeps running without a pane) and opens a
@@ -146,7 +154,8 @@ button, and Float controls in pane headers.
     dragged-overlay rectangle or all pane rectangles, so Along deliberately
     does not infer a drop target from the float's visual position.
   - `along-float/` — the floating window's bar, a copy of the shipped
-    `peek` bar. Shows the program icon, name and agent status; the four
+    `peek` bar. Shows the program icon, the custom name (else its own) and
+    agent status; the four
     direction buttons return the terminal beside the currently focused pane
     (then the per-tab remembered target, then the recorded source neighbor
     as fallback). The direction is explicit because the overlay's visual

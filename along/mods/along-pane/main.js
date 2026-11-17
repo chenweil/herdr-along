@@ -8,12 +8,35 @@
 // row of them would sit under the app's top-center grip and be unclickable.
 
 import { View, div, svg, image } from "gpui-kit";
-import { h_flex, v_flex, Popover } from "gpui-base";
+import { h_flex, v_flex, Popover, InputState, Input } from "gpui-base";
 import { panes, props, run, openOverlay, closeOverlay, theme, home, layout, spaces, focused, shared, setShared, notify } from "herdr";
 
 // 头部宽度小于这个值就把按钮收进一个「⋯」菜单：按钮条太宽时会撞上
 // app 画在 pane 顶边中央的拖拽把手（grip），窄 pane 里点不到按钮。
 const NARROW = 320;
+
+// Along keeps its own names for panes and agents: the core has no name for a
+// pane, so the name lives in shared state, where every mod sees it. The key
+// is the terminal's address (a pane with no terminal keys on the pane itself),
+// so the pane header, the agents list and the float bar name one thing.
+const NAMES = "along.names";
+function nameMap() {
+  const raw = shared(NAMES);
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+}
+function nameKey(pane) {
+  return pane.terminal ? `t:${pane.terminal}` : `p:${pane.pane}`;
+}
+function customName(key) {
+  return key ? (nameMap()[key] ?? "") : "";
+}
+function saveName(key, text) {
+  if (!key) return;
+  const all = nameMap();
+  const clean = (text ?? "").trim();
+  if (clean) all[key] = clean; else delete all[key];
+  setShared(NAMES, all);
+}
 
 // Match the first visible tab frame, including the active child of a stack.
 function paneFrame(node) {
@@ -42,11 +65,51 @@ function folder(cwd) {
   return cwd === h ? "~" : cwd.startsWith(h + "/") ? "~" + cwd.slice(h.length) : cwd;
 }
 
+function paneName(p) {
+  return ((p.program?.agent || p.program?.shell) && p.program.name) || p.title || p.program?.name || "shell";
+}
+
 export default class Pane extends View {
-  init() { this.hovered = false; this.width = 0; this.menu = false; }
+  init(_props, cx) {
+    this.hovered = false; this.width = 0; this.menu = false;
+    // Clicking the header's name edits it in place. The input is kept on the
+    // view: InputState.new needs a live host call, so it can't be made in render.
+    this.editing = false;
+    this.handle = cx.focus_handle();
+    this.input = InputState.new({ placeholder: "Pane name" });
+    this.input.on("submit", (_e, cx) => this.commitName(cx));
+    this.input.on("blur", (_e, cx) => { if (this.editing) this.commitName(cx, false); });
+  }
 
   me() {
     return panes().find((p) => p.pane === props()?.pane);
+  }
+
+  beginName(p, cx) {
+    this.editing = true;
+    this.input.set_value(customName(nameKey(p)) || paneName(p));
+    cx.notify();
+    this.input.focus();
+  }
+
+  commitName(cx, refocus = true) {
+    if (!this.editing) return;
+    const p = this.me();
+    this.editing = false;
+    if (p) saveName(nameKey(p), this.input.value());
+    cx.notify();
+    // Enter commits and hands the keyboard back to the pane, so typing goes
+    // to the terminal again instead of the input. A blur commits too, but
+    // leaves focus where the click put it (another pane's name, say).
+    if (refocus && p) run("pane.focus", { pane: p.pane });
+  }
+
+  cancelName(cx) {
+    this.editing = false;
+    this.input.set_value("");
+    cx.notify();
+    const p = this.me();
+    if (p) run("pane.focus", { pane: p.pane });
   }
 
   button(t, id, icon, onClick) {
@@ -197,7 +260,8 @@ export default class Pane extends View {
     const t = theme();
     const p = this.me();
     if (!p) return div();
-    const name = ((p.program?.agent || p.program?.shell) && p.program.name) || p.title || p.program?.name || "shell";
+    const key = nameKey(p);
+    const name = customName(key) || paneName(p);
     const pic = icon(p.program, 14, t.dim);
     const st = p.status;
     const pane = p.pane;
@@ -214,6 +278,13 @@ export default class Pane extends View {
       .border_color(t.border)
       .text_size(12)
       .on_hover((hovered, cx) => { this.hovered = hovered; cx.notify(); })
+      .track_focus(this.handle)
+      .on_key_down((e, cx) => {
+        if (this.editing && e.key === "escape") {
+          cx.stop_propagation();
+          this.cancelName(cx);
+        }
+      })
       .on_mouse_move((e, cx) => {
         // 头部宽度就是 pane 宽度：窄了才把按钮折叠起来。
         const w = e.bounds?.width ?? 0;
@@ -232,7 +303,34 @@ export default class Pane extends View {
         run("pane.focus", { pane });
       })
       .when(Boolean(pic), (el) => el.child(pic))
-      .child(div().flex_none().truncate().max_w(260).font_medium().text_color(t.foreground).child(name))
+      .when(this.editing, el => el.child(div()
+        .id(`ph-n-${pane}`)
+        .w(180)
+        .flex_none()
+        .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+        .child(Input.new(this.input)
+          .h(20)
+          .px(4)
+          .rounded(4)
+          .border(1)
+          .border_color(t.accent)
+          .bg(t.background)
+          .text_size(12)
+          .text_color(t.foreground))))
+      .when(!this.editing, el => el.child(div()
+        .id(`ph-n-${pane}`)
+        .flex_none()
+        .truncate()
+        .max_w(260)
+        .font_medium()
+        .text_color(t.foreground)
+        .cursor_text()
+        .tooltip("Click to rename")
+        .on_click((_e, cx) => {
+          cx.stop_propagation();
+          this.beginName(p, cx);
+        })
+        .child(name)))
       .child(div().flex_1().truncate().text_color(t.dim).child(folder(p.cwd)))
       .when(st === "working", el => el.child(svg("mods/workspace-chrome/spinner.svg").size(12).flex_none().text_color(t.working).spin(900)))
       .when(st === "blocked", el => el.child(div().flex_none().px(6).h(18).flex().items_center().rounded(5).bg(t.blocked + "26").text_size(10.5).font_semibold().text_color(t.blocked).child("Needs you")))

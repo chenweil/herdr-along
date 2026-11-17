@@ -2,6 +2,17 @@
 
 Earlier builds did not carry a version number; this log starts at 0.3.0.
 
+## 0.4.6 - 2026-11-18
+
+- Panes can be renamed. A click on the name in a pane header turns it into
+  an input: Enter saves, Escape cancels, and clicking away keeps what was
+  typed. The name lives in shared state keyed by the terminal, so the pane
+  header, the agent list and the float bar all read the same name and it
+  survives a restart.
+- Agent rows in the sidebar show that name too, and a right-click on a row
+  opens the same input in place. Clearing the name restores the automatic
+  one (the agent's title, else the program's name).
+
 ## 0.4.5 - 2026-11-17
 
 - The spaces list redraws itself when its agents change. An agent that
