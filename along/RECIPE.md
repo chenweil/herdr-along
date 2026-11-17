@@ -8,7 +8,7 @@ a state mark per agent.
 
 ![Along](preview.png)
 
-Version 0.4.4. See [CHANGELOG.md](CHANGELOG.md) for what changed.
+Version 0.4.5. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 This file is the brief: enough to build Along from an empty folder. The
 files next to it are one build of it. If they don't work on your Herdr, or you
@@ -96,8 +96,15 @@ button, and Float controls in pane headers.
   agent's sub-agent tree when clicked), the agent's name (its own title, else
   the tab's), the machine name when remote, and a small state mark — a
   spinner while working, a red `!` when blocked, a dot when done, an open
-  ring when idle. Clicking a row focuses the agent's pane; clicking an icon
+  ring when idle. An agent program that reports no status (no OSC 7501)
+  gets a plain dim mark: it is running, only its state is unknown.
+  Clicking a row focuses the agent's pane; clicking an icon
   of a sub-agent without a pane peeks at it.
+- The list keeps itself: an agent that starts, ends, moves to another space
+  or changes state redraws the rows under its space without waiting for
+  something else to change. The focused agent's row is highlighted.
+- An agent is listed under the space its own pane is in; a floated one
+  (a float, "Send back") keeps the space it was parked from.
 - Indentation follows the space's own: a main checkout's row sits at 8px so
   its agents go to 32px and their sub-agents to 50px; a worktree's row sits
   at 22px past its branch icon, so its agents go to 46px and their
@@ -165,15 +172,19 @@ button, and Float controls in pane headers.
   - `along-spaces/` — the shipped `spaces` mod with the sidebar expand button
     at the start of the compact rail, and the agents list folded in: each
     space's row is followed by its agents (see "Spaces and agents in one
-    list"). It reads `agents()`, `terminals()` and `focused()`, sorts with
-    the agents list's urgency ranking, and calls `setAgentOrder` in the
-    spaces' order so keyboard navigation keeps working.
+    list"). It reads `agents()`, `terminals()`, `focused()` and
+    `knownAgents()`, sorts with the agents list's urgency ranking, and
+    calls `setAgentOrder` in the spaces' order so keyboard navigation keeps
+    working. `knownAgents()` is what tells it which programs the app can
+    start as agents (the `run` entries in programs.json), so an agent CLI
+    added by hand gets a row even when it reports no status.
   - `along-agents/` — the shipped `agents` mod without the expand button that
     used to sit at the bottom of the compact rail. No longer mounted by the
     layout; kept in the repo for reference and possible return.
 - **Data:** `spaces()`, `panes()` and `focused()` for the folder and the
   remote machine, `agents()` and `terminals()` for the agents under each
-  space, `theme()` for every color, `settings()` for the preview
+  space, `knownAgents()` for the programs the app can start as agents,
+  `theme()` for every color, `settings()` for the preview
   font, `window()` for the platform.
 - **Commands and programs:** `openOverlay` and `closeOverlay`; `exec("sh")`
   or `exec("powershell")` to list a folder; `exec("git")` for the root,
@@ -212,8 +223,8 @@ button, and Float controls in pane headers.
 ## Done when
 
 - `herdr-app check mods/along-files`, `mods/along-changes`, `mods/along-menu`,
-  `mods/along-machines`, `mods/along-tabs`, `mods/along-pane`, `mods/along-float`
-  and `mods/along-chrome` pass.
+  `mods/along-machines`, `mods/along-tabs`, `mods/along-pane`, `mods/along-float`,
+  `mods/along-spaces` and `mods/along-chrome` pass.
 - Switching to `along` (`ctrl-shift-l`, or `layout.switch along`) shows the
   sidebar, the tab bar with Machines next to Files and Changes, the terminals
   and the right panel with Files in front.
@@ -240,3 +251,6 @@ button, and Float controls in pane headers.
   host window; Along does not use it to infer a drop target.
 - Switching to another layout and back keeps the panels, and Files still
   follows the focused pane's folder.
+- An agent that starts, finishes or changes state shows up under its space
+  without touching the window, and a pane running an agent program that
+  reports no status gets a row with a dim mark.

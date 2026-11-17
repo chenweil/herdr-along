@@ -2,6 +2,23 @@
 
 Earlier builds did not carry a version number; this log starts at 0.3.0.
 
+## 0.4.5 - 2026-11-17
+
+- The spaces list redraws itself when its agents change. An agent that
+  starts, ends, moves to another space or changes state had no trigger, so
+  the list sat stale (five rows for six agents) until something else
+  notified. A signature over the agents and the terminals now catches
+  those, with the pane's space and the focus in it, so the rows follow
+  along.
+- A pane running an agent program that reports no status gets a row too.
+  The programs the app can start as agents (the `run` entries in
+  programs.json) are read when the window opens and again now and then, so
+  an agent CLI added by hand shows up next to the built-in ones. Its mark
+  is a plain dim dot: it is running, only its state is unknown.
+- An agent is listed under the space its own pane is in, not under the
+  one it was started in; a floated one keeps the space it was parked
+  from. The focused agent's row is highlighted.
+
 ## 0.4.4 - 2026-11-16
 
 - Spaces and agents are one list now. Each space's row is followed by its own

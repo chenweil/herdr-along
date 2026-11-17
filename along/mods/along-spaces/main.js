@@ -8,7 +8,7 @@
 
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex, ScrollHandle } from "gpui-base";
-import { spaces, machines, agents, terminals, focused, panes, run, openOverlay, exec, hc, theme, shared, setShared, setAgentOrder, watchFolder, window, layout } from "herdr";
+import { spaces, machines, agents, terminals, focused, panes, run, openOverlay, exec, hc, theme, shared, setShared, setAgentOrder, watchFolder, window, layout, knownAgents } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -66,6 +66,10 @@ const MARK = { ansi6: "#22a99a", ansi3: "#e3814f", ansi4: "#5b8def", ansi5: "#8b
 
 // Agents sort urgent-first inside their space; pinned ones always first.
 const RANK = { blocked: 4, done: 3, working: 2, idle: 1 };
+// An agent that reports no status (no OSC 7501) counts as idle: it is running,
+// only its state is unknown. One shared rank keeps the list and the rail's
+// mini marks in step.
+const stateRank = (status) => (status == null ? RANK.idle : RANK[status] ?? 0);
 // A sub-agent without a pane isn't in agents(): its raw word, error counting as
 // blocked. It's never done: it reports to its parent, and the parent's done is the news.
 const kidStatus = (k, listed) => {
@@ -120,19 +124,52 @@ export default class Spaces extends View {
     // back") has no pane, so agents() drops it and this is the only home left.
     try { this.homes = JSON.parse(localStorage.getItem("agent.homes") ?? "{}"); } catch { this.homes = {}; }
     if (!this.homes || typeof this.homes !== "object" || Array.isArray(this.homes)) this.homes = {};
+    // The programs the app can start as agents (programs.json's `run` entries).
+    // `program.agent` marks a terminal an agent started; a CLI added to
+    // programs.json by hand is only known here, so a pane running one still
+    // gets a row.
+    this.agentPrograms = new Set();
+    this.loadAgentPrograms(cx);
     this.refreshMachines(cx);
     cx.timer.every(15000, cx => this.refreshMachines(cx));
+    // The table can change while the window is open (a new agent CLI added by
+    // hand), so the list is read again now and then. The app answers from a
+    // minute-long cache, so this rarely costs a shell.
+    cx.timer.every(45000, cx => this.loadAgentPrograms(cx));
     // Refresh only when the refs could have changed (see `due`).
     cx.timer.every(250, (cx) => this.checkNew(cx));
+  }
+
+  loadAgentPrograms(cx) {
+    cx.spawn(async (cx) => {
+      try {
+        const list = await knownAgents();
+        this.agentPrograms = new Set(list.map((a) => a.key));
+        cx.notify();
+      } catch {}
+    });
   }
 
   checkNew(cx) {
     const now = Date.now();
     const sp = spaces();
     for (const s of sp) if (!this.shown.has(s.id)) this.born[s.id] ??= now;
-    const due = this.due(now, sp, panes());
+    const ps = panes();
+    const due = this.due(now, sp, ps);
     if (due.size) this.refreshGit(due, cx);
     if (sp.some((s) => !this.shown.has(s.id)) || this.orderingDue(now)) cx.notify();
+    // Rows under spaces follow agents and terminals, but nothing above re-rendered
+    // when one started, ended, moved space or changed status: the list sat stale
+    // (five shown four) until some other event notified. Render reads agents()
+    // fresh, so only the trigger was missing. A signature catches each: address,
+    // status/state, where it sits (its own space, or the tab its pane is in),
+    // and how it sorts and reads (pinned, focused, seq).
+    const tabSpace = new Map(sp.flatMap((s) => (s.tabs ?? []).map((tb) => [tb.id, s.id])));
+    const seatOf = new Map(ps.filter((p) => p.terminal).map((p) => [p.terminal, tabSpace.get(p.tab) ?? ""]));
+    const sig = [...agents(), ...terminals()]
+      .map((a) => [a.address, a.status ?? a.state ?? "", seatOf.get(a.address) ?? a.space ?? a.parent ?? "", a.pinned, a.focused, a.seq])
+      .sort().join("|");
+    if (sig !== this.agentSig) { this.agentSig = sig; cx.notify(); }
   }
 
   // Places whose git could have changed: new ones (a new space, a cd), where a
@@ -327,6 +364,8 @@ export default class Spaces extends View {
   // A small state mark: spinner while working, a red ! when blocked, a dot when
   // done, an open ring when idle. Compact, so it fits under a space's row.
   agentStatus(t, a) {
+    // No status: an agent program that doesn't report (no OSC 7501).
+    if (a.status == null) return div().size(7).mx(3).flex_none().rounded(4).bg(t.dim + "66");
     if (a.status === "working") return svg("mods/workspace-chrome/spinner.svg").size(12).mx(1).flex_none().text_color(t.working).spin(900);
     if (a.status === "blocked") return div().size(14).flex_none().rounded(4).bg(t.blocked + "26").text_size(10.5).font_bold().text_color(t.blocked).flex().items_center().justify_center().child("!");
     if (a.status === "done") return div().size(7).mx(3).flex_none().rounded(4).bg(t[a.status] ?? t.ansi2);
@@ -376,7 +415,7 @@ export default class Spaces extends View {
   // checkout's row sits at pl 8, so its agents go to 32.
   agentRow(t, a, tree, name) {
     const pic = this.agentIcon(a.program, 14, t.foreground);
-    const on = this.shownAgent === a.address;
+    const on = this.shownAgent === a.address || Boolean(a.focused);
     const machine = a.address.includes("/") ? a.address.split("/")[0] : null;
     const subs = a.kids?.length ?? 0;
     return h_flex()
@@ -399,7 +438,7 @@ export default class Spaces extends View {
           cx.notify();
         }))
         .child(pic)))
-      .child(div().flex_1().min_w(0).truncate().text_color(a.status === "idle" && !on ? t.muted : t.foreground).child(name ?? a.rowName))
+      .child(div().flex_1().min_w(0).truncate().text_color((a.status == null || a.status === "idle") && !on ? t.muted : t.foreground).child(name ?? a.rowName))
       .when(Boolean(machine), el => el.child(div().flex_none().text_size(10).text_color(t.dim).child(machine)))
       .when(Boolean(a.parked), el => el.child(div().flex_none().text_size(11).text_color(t.dim).tooltip("Floated · click to bring it back").child("⤢")))
       .when(subs > 0 && this.agentFolded.has(a.address), el => el.child(div().flex_none().text_size(10.5).text_color(t.dim).child(String(subs))))
@@ -646,7 +685,7 @@ export default class Spaces extends View {
     // mini marks at its bottom instead, at most eight in two rows of four,
     // urgent ones first (a blocked agent shows even when more sit behind it).
     // Idle dots are dim; working spins; done is a dot in the theme's done color.
-    const ags = [...(this.bySpace.get(w.id) ?? [])].sort((x, y) => (RANK[y.status] ?? 0) - (RANK[x.status] ?? 0));
+    const ags = [...(this.bySpace.get(w.id) ?? [])].sort((x, y) => stateRank(y.status) - stateRank(x.status));
     const marks = ags.slice(0, 8).map((a) => a.status === "working"
       ? svg("mods/workspace-chrome/spinner.svg").size(8).flex_none().text_color(t.working).spin(900)
       : div().size(5).flex_none().rounded(2.5).bg(a.status === "idle" ? t.dim : (t[a.status] ?? t.dim)));
@@ -697,6 +736,8 @@ export default class Spaces extends View {
     const ags = [...agents()];
     const all = terminals();
     this.shownAgent = focused()?.agent;
+    const tabNames = new Map(sp.flatMap(s => s.tabs).map(tb => [tb.id, tb.name]));
+    const tabSpace = new Map(sp.flatMap(s => s.tabs.map(tb => [tb.id, s])));
     // A parked agent's terminal has no pane, so agents() drops it and it would
     // vanish from its space. The float bar records the source space and tab in
     // along.floats.origins while it floats (dismissed with the window), and
@@ -709,30 +750,36 @@ export default class Spaces extends View {
     }
     const origins = shared("along.floats.origins") ?? {};
     const shown = new Set(ags.map((a) => a.address));
-    const paneTerminals = new Set(panes().map((p) => p.terminal).filter(Boolean));
+    const paneByTerminal = new Map(panes().filter((p) => p.terminal).map((p) => [p.terminal, p]));
     for (const tr of all) {
-      // Finished programs and sub-agents (drawn in their parent's tree) stay
-      // out; a terminal still shown somewhere isn't parked.
+      // Finished programs and sub-agents (drawn in their parent's tree) stay out.
       if (shown.has(tr.address) || tr.state === "finished" || tr.parent) continue;
-      if (!tr.program?.agent && !tr.status) continue;
-      if (paneTerminals.has(tr.address)) continue;
+      // An agent program that reports no status (no OSC 7501) still gets a row
+      // while it has a pane: it is running, only its state is unknown. A terminal
+      // with neither is no agent; one with no pane and no status is not shown.
+      const pane = paneByTerminal.get(tr.address);
+      const agentProgram = tr.program?.agent || this.agentPrograms.has(tr.program?.key);
+      if (!tr.status && !(agentProgram && pane)) continue;
+      // Where its pane lives, when it has one; else where it was parked from.
+      const here = pane ? tabSpace.get(pane.tab) : null;
       const o = origins[tr.address];
       const home = o?.space ? { space: o.space, name: o.spaceName ?? "" } : homes[tr.address];
       ags.push({
         address: tr.address,
-        pane: null,
-        space: home?.space ?? null,
-        space_name: home?.name ?? "",
-        tab: o?.tab,
-        tab_name: o?.tabName ?? "",
-        status: tr.status ?? "idle",
-        app: tr.app ?? null,
-        program: tr.program,
-        title: tr.title ?? tr.name ?? "",
+        pane: pane?.pane ?? null,
+        space: here?.id ?? home?.space ?? null,
+        space_name: here?.name ?? home?.name ?? "",
+        tab: pane?.tab ?? o?.tab,
+        tab_name: pane ? tabNames.get(pane.tab) ?? "" : o?.tabName ?? "",
+        // An empty word is no status: the row shows a plain dim mark.
+        status: tr.status || null,
+        app: tr.app ?? pane?.app ?? null,
+        program: tr.program ?? pane?.program,
+        title: tr.title ?? pane?.title ?? tr.name ?? "",
         seq: 0,
         pinned: Boolean(tr.labels?.["herdr.pinned"]),
-        focused: false,
-        parked: true,
+        focused: Boolean(pane?.focused),
+        parked: !pane,
       });
     }
     // Homes of terminals that are gone are dead weight.
@@ -743,7 +790,6 @@ export default class Spaces extends View {
     this.listed = new Map(ags.map((a) => [a.address, a.status]));
     const nested = new Set();
     for (const a of ags) for (const s of this.subTree(all, a.address)) nested.add(s.t.address);
-    const tabNames = new Map(sp.flatMap(s => s.tabs).map(tb => [tb.id, tb.name]));
     const nameOf = (a) => clean(a.title) || tabNames.get(a.tab) || a.program?.name || a.address.split("/").pop();
     this.bySpace = new Map();
     this.orphans = [];
@@ -758,7 +804,7 @@ export default class Spaces extends View {
         this.bySpace.get(a.space).push(a);
       } else this.orphans.push(a);
     }
-    const rank = (a) => (a.pinned ? 5 : RANK[a.status] ?? 0);
+    const rank = (a) => (a.pinned ? 5 : stateRank(a.status));
     const byUrgency = (x, y) => rank(y) - rank(x) || y.seq - x.seq;
     for (const l of this.bySpace.values()) l.sort(byUrgency);
     this.orphans.sort(byUrgency);
