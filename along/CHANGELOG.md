@@ -2,6 +2,25 @@
 
 Earlier builds did not carry a version number; this log starts at 0.3.0.
 
+## 0.4.7 - 2026-11-18
+
+- State colours: one fixed palette for every mark and every name, in the
+  sidebar, the pane header and the float bar. Working `#4ade80`, done
+  `#3fae6a`, blocked `#e3814f`, error `#e5484d`, idle `#8f8f8f`. A state now
+  reads the same in light and dark themes, and focusing an agent row no
+  longer replaces its colour: focus is the row's background only.
+- `error` gets its own mark and colour. It used to fall through to the idle
+  ring, and a sub-agent's error was folded into `blocked`, so a failure read
+  as orange. Both read red now, and error sorts above blocked.
+- Agent rows hang off their space with tree lines: a vertical line from the
+  space's icon centre through a gap, a short stub into each row's icon, and
+  the last row closing it. The gap keeps the space's rounded background from
+  touching the first agent's, and the agent row's own highlight is narrower
+  than the space's.
+- The brand row folds its Settings, Search and Hide buttons into one `⋯` when
+  the sidebar is narrower than 236px, so a dragged-in sidebar no longer clips
+  them. Above 160px it is the `⋯`; below that the rail takes over as before.
+
 ## 0.4.6 - 2026-11-18
 
 - Panes can be renamed. A click on the name in a pane header turns it into

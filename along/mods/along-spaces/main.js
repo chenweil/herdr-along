@@ -64,17 +64,29 @@ async function both(a, b) {
 // that draws space avatars): one strong color per hue, light and dark alike.
 const MARK = { ansi6: "#22a99a", ansi3: "#e3814f", ansi4: "#5b8def", ansi5: "#8b7cf6", ansi2: "#3fae6a", ansi1: "#d9649a" };
 
+// 状态色：报错红、需要人橙、完成绿、空闲灰、工作中蓝。用固定色而不是主题键，
+// 因为主题的 blocked 未必是橙、error 未必是红，而指示灯要一眼能读出来。
+const STATE = {
+  error: "#e5484d",
+  blocked: "#e3814f",
+  done: "#3fae6a",
+  idle: "#8f8f8f",
+  working: "#4ade80",
+};
+const stateColor = (status) => STATE[status] ?? STATE.idle;
+
 // Agents sort urgent-first inside their space; pinned ones always first.
-const RANK = { blocked: 4, done: 3, working: 2, idle: 1 };
+const RANK = { error: 5, blocked: 4, done: 3, working: 2, idle: 1 };
 // An agent that reports no status (no OSC 7501) counts as idle: it is running,
 // only its state is unknown. One shared rank keeps the list and the rail's
 // mini marks in step.
 const stateRank = (status) => (status == null ? RANK.idle : RANK[status] ?? 0);
-// A sub-agent without a pane isn't in agents(): its raw word, error counting as
-// blocked. It's never done: it reports to its parent, and the parent's done is the news.
+// A sub-agent without a pane isn't in agents(): its raw word, error kept as
+// error so it reads red. It's never done: it reports to its parent, and the
+// parent's done is the news.
 const kidStatus = (k, listed) => {
   const s = listed.get(k.address) ?? k.status;
-  return s === "error" ? "blocked" : s === "done" ? "idle" : s;
+  return s === "done" ? "idle" : s;
 };
 // Drop what an agent puts before its title: a status glyph or spinner and the
 // separator after it ("✦  Working"), and Codex's blinking "[ ! ] " / "[ . ] " mark.
@@ -100,11 +112,11 @@ function saveName(address, text) {
 
 // A space speaks up only when something in it needs you.
 export function glyph(status) {
-  return status === "blocked" || status === "done" ? "●" : "·";
+  return status === "blocked" || status === "done" || status === "error" ? "●" : "·";
 }
 
 export function tone(t, status) {
-  return t[status] ?? t.unknown;
+  return stateColor(status);
 }
 
 export default class Spaces extends View {
@@ -386,13 +398,16 @@ export default class Spaces extends View {
 
   // A small state mark: spinner while working, a red ! when blocked, a dot when
   // done, an open ring when idle. Compact, so it fits under a space's row.
+  // 小状态标：工作中转圈、报错红点、需要人橙 `!`、完成绿点、空闲灰环。均按状态色。
   agentStatus(t, a) {
+    const c = stateColor(a.status);
     // No status: an agent program that doesn't report (no OSC 7501).
-    if (a.status == null) return div().size(7).mx(3).flex_none().rounded(4).bg(t.dim + "66");
-    if (a.status === "working") return svg("mods/workspace-chrome/spinner.svg").size(12).mx(1).flex_none().text_color(t.working).spin(900);
-    if (a.status === "blocked") return div().size(14).flex_none().rounded(4).bg(t.blocked + "26").text_size(10.5).font_bold().text_color(t.blocked).flex().items_center().justify_center().child("!");
-    if (a.status === "done") return div().size(7).mx(3).flex_none().rounded(4).bg(t[a.status] ?? t.ansi2);
-    return div().size(7).mx(3).flex_none().rounded(4).border(1.5).border_color(t.idle ?? t.dim);
+    if (a.status == null) return div().size(7).mx(3).flex_none().rounded(4).bg(c + "66");
+    if (a.status === "working") return svg("mods/workspace-chrome/spinner.svg").size(12).mx(1).flex_none().text_color(c).spin(900);
+    if (a.status === "blocked") return div().size(14).flex_none().rounded(4).bg(c + "26").text_size(10.5).font_bold().text_color(c).flex().items_center().justify_center().child("!");
+    if (a.status === "done") return div().size(7).mx(3).flex_none().rounded(4).bg(c);
+    if (a.status === "error") return div().size(7).mx(3).flex_none().rounded(4).bg(c);
+    return div().size(7).mx(3).flex_none().rounded(4).border(1.5).border_color(c);
   }
 
   // Live sub-agents of `addr`, depth first, each with the tree lines in front of it.
@@ -429,28 +444,35 @@ export default class Spaces extends View {
         .when(Boolean(l), el => el.border_l(1.5).border_color(t.input))
         .when(l === "└" || l === "├", el => el.border_b(1.5).rounded_bl(6))))
       .when(Boolean(pic), el => el.child(div().mr(7).child(pic)))
-      .child(div().flex_1().min_w(0).truncate().text_color(on ? t.foreground : t.muted).child(k.name || k.template || k.program?.name || k.address.split("/").pop()))
+      .child(div().flex_1().min_w(0).truncate().text_color(stateColor(st)).child(k.name || k.template || k.program?.name || k.address.split("/").pop()))
       .child(this.agentStatus(t, { status: st }));
   }
 
   // One agent under its space's row. `tree`: the space is a worktree, whose row
   // already sits at pl 22 past its branch icon, so its agents go deeper; a main
   // checkout's row sits at pl 8, so its agents go to 32.
-  agentRow(t, a, tree, name) {
+  agentRow(t, a, tree, name, last = null) {
     const pic = this.agentIcon(a.program, 14, t.foreground);
     const on = this.shownAgent === a.address || Boolean(a.focused);
     const machine = a.address.includes("/") ? a.address.split("/")[0] : null;
     const subs = a.kids?.length ?? 0;
     return h_flex()
+      .relative()
       .id(`ag-${a.address}`)
-      .pl(tree ? 46 : 32)
-      .pr(8)
-      .h(24)
+      .ml(tree ? 46 : 32)
+      .mr(8)
+      .pr(6)
+      .h(22)
       .flex_none()
-      .rounded(6)
+      .rounded(5)
       .items_center()
       .gap(7)
       .text_size(12)
+      // 树线：一根竖线从 space 行垂下，每行再一道横线连到图标，像树一样。
+      // 位置对齐 space 行的图标中心（从行左边缘往左推 10）。`last` 为 null
+      // 时不画线（Elsewhere 分组直接列 agent）；最后一行用 └ 收尾。
+      .when(last !== null, el => el.child(div().absolute().left(tree ? -5 : -10).top(0).when(last, d => d.h(11)).when(!last, d => d.bottom(0)).w(1).bg(t.border)))
+      .when(last !== null, el => el.child(div().absolute().left(tree ? -5 : -10).top(10.5).w(7).h(1).bg(t.border)))
       .when(on, (el) => el.bg(t.selected))
       .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
       .on_click(() => (a.parked ? run("terminal.keep", { terminal: a.address }) : run("pane.focus", { pane: a.pane })))
@@ -478,11 +500,21 @@ export default class Spaces extends View {
           .bg(t.background)
           .text_size(12)
           .text_color(t.foreground))))
-      .when(this.renaming?.address !== a.address, el => el.child(div().flex_1().min_w(0).truncate().text_color((a.status == null || a.status === "idle") && !on ? t.muted : t.foreground).tooltip("Right-click to rename").child(name ?? a.rowName)))
+      .when(this.renaming?.address !== a.address, el => el.child(div().flex_1().min_w(0).truncate().text_color(stateColor(a.status)).tooltip("Right-click to rename").child(name ?? a.rowName)))
       .when(Boolean(machine), el => el.child(div().flex_none().text_size(10).text_color(t.dim).child(machine)))
       .when(Boolean(a.parked), el => el.child(div().flex_none().text_size(11).text_color(t.dim).tooltip("Floated · click to bring it back").child("⤢")))
       .when(subs > 0 && this.agentFolded.has(a.address), el => el.child(div().flex_none().text_size(10.5).text_color(t.dim).child(String(subs))))
       .child(this.agentStatus(t, a));
+  }
+
+  // space 行与它的第一个 agent 行之间的空隙，树线在里面继续向下。
+  agentGap(tree, t) {
+    return div()
+      .h(4)
+      .flex_none()
+      .relative()
+      .ml(tree ? 46 : 32)
+      .child(div().absolute().left(tree ? -5 : -10).top(0).bottom(0).w(1).bg(t.border));
   }
 
   // The rows under one space's row: each agent, then its live sub-agents unless folded.
@@ -491,8 +523,9 @@ export default class Spaces extends View {
     if (!list?.length) return [];
     const pl = tree ? 64 : 50;
     const rows = [];
-    for (const a of list) {
-      rows.push(this.agentRow(t, a, tree));
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      rows.push(this.agentRow(t, a, tree, undefined, i === list.length - 1));
       if (!this.agentFolded.has(a.address)) for (const s of a.kids ?? []) rows.push(this.subRow(t, s, pl));
     }
     return rows;
@@ -575,7 +608,13 @@ export default class Spaces extends View {
     const rows = this.ordered();
     // Each space's row, then its agents; a worktree row keeps its place after
     // the main checkout's agents and carries its own agents one level deeper.
-    const draw = (r) => (collapsed ? [this.compact(r, t)] : [this.row(r, t), ...this.agentRows(r.w, r.tree, t)]);
+    const draw = (r) => {
+      if (collapsed) return [this.compact(r, t)];
+      const kids = this.agentRows(r.w, r.tree, t);
+      // space 行的圆角背景块和第一个 agent 行之间留一道缝，否则两块粘在
+      // 一起像一块；缝里把树线接上，线不断。
+      return kids.length ? [this.row(r, t), this.agentGap(r.tree, t), ...kids] : [this.row(r, t)];
+    };
     // Where the active space's row lands among the children this returns: the list scrolls by its direct
     // children, and machine headers, login notes and loading rows count too.
     this.activeAt = -1;
@@ -749,8 +788,8 @@ export default class Spaces extends View {
     // Idle dots are dim; working spins; done is a dot in the theme's done color.
     const ags = [...(this.bySpace.get(w.id) ?? [])].sort((x, y) => stateRank(y.status) - stateRank(x.status));
     const marks = ags.slice(0, 8).map((a) => a.status === "working"
-      ? svg("mods/workspace-chrome/spinner.svg").size(8).flex_none().text_color(t.working).spin(900)
-      : div().size(5).flex_none().rounded(2.5).bg(a.status === "idle" ? t.dim : (t[a.status] ?? t.dim)));
+      ? svg("mods/workspace-chrome/spinner.svg").size(8).flex_none().text_color(stateColor("working")).spin(900)
+      : div().size(5).flex_none().rounded(2.5).bg(stateColor(a.status)));
     const rows = [];
     for (let n = 0; n < marks.length; n += 4) rows.push(marks.slice(n, n + 4));
     return railCell(v_flex()

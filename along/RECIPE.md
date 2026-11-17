@@ -8,7 +8,7 @@ under the space's own row, one list with a state mark per agent.
 
 ![Along](preview.png)
 
-Version 0.4.6. See [CHANGELOG.md](CHANGELOG.md) for what changed.
+Version 0.4.7. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 This file is the brief: enough to build Along from an empty folder. The
 files next to it are one build of it. If they don't work on your Herdr, or you
@@ -95,11 +95,23 @@ button, and Float controls and click-to-rename names in pane headers.
 - Each space's row is followed by its agents: the program icon (it folds the
   agent's sub-agent tree when clicked), the agent's name (its own title, else
   the tab's), the machine name when remote, and a small state mark — a
-  spinner while working, a red `!` when blocked, a dot when done, an open
-  ring when idle. An agent program that reports no status (no OSC 7501)
-  gets a plain dim mark: it is running, only its state is unknown.
+  spinner while working, a red `!` when blocked, a dot when done, a dot when
+  the agent errored, an open ring when idle. An agent program that reports no
+  status (no OSC 7501) gets a plain dim mark: it is running, only its state is
+  unknown.
   Clicking a row focuses the agent's pane; clicking an icon
   of a sub-agent without a pane peeks at it.
+- **State colours.** Every mark and every name uses one fixed palette rather
+  than the theme's keys, so a state reads the same in light and dark: working
+  `#4ade80`, done `#3fae6a`, blocked `#e3814f`, error `#e5484d`, idle
+  `#8f8f8f`. The pane header's name, the agent row's name and the float bar's
+  name all take their state's colour, and focusing a row does not replace it:
+  focus is the row's background only. The same palette is copied into
+  `along-pane`, `along-spaces` and `along-float` (each mod loads on its own).
+- **Tree lines.** A 1px `border` line drops from the space row's icon centre
+  through a 4px gap and down the left of its agent rows, with a short
+  horizontal stub into each row's icon; the last row ends it. The gap keeps
+  the space's rounded background from touching the first agent's.
 - The list keeps itself: an agent that starts, ends, moves to another space
   or changes state redraws the rows under its space without waiting for
   something else to change. The focused agent's row is highlighted.
@@ -140,7 +152,9 @@ button, and Float controls and click-to-rename names in pane headers.
   - `along-chrome/` — the shipped `workspace-chrome` mod with a Settings
     button in the brand row, left of the search button; it carries the
     update-ready dot the footer's Settings row used to show. There is no
-    footer: adding a machine lives in the Machines dialog now.
+    footer: adding a machine lives in the Machines dialog now. Below 236px of
+    sidebar (but above the 160px rail) the three buttons fold into one `⋯`
+    that opens `along-menu` with the same three actions.
   - `along-pane/` — the shipped `pane` header mod plus a Float button and an
     in-place rename input: the name it shows is `shared("along.names")`'s
     entry for the pane, else the program's or the terminal's own. It probes
@@ -173,7 +187,9 @@ button, and Float controls and click-to-rename names in pane headers.
     after the Files and Changes buttons.
   - `along-menu/` — the popup. Reads `props().target` (`path`, `relative`,
     `name`) and `props().overlay`, writes with `cx.write_to_clipboard`, closes
-    with `closeOverlay`.
+    with `closeOverlay`. Given `props().target.actions` instead (a list of
+    `{ label, icon, run }`), it draws those and runs the chosen one: the
+    brand row's `⋯` uses this.
   - `along-machines/` — the dialog. Reads with `exec("hc", ["machine", "ls",
     "--json"])`, writes with `hc machine rm` and `hc machine add`, and keeps
     disabled profiles in shared state under `along.machines.disabled`. It

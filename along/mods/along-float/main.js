@@ -12,6 +12,17 @@ import { agents, terminals, panes, spaces, focused, run, theme, props, closeOver
 const SPIN = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const WORDS = { working: "working", blocked: "needs you", done: "finished", idle: "idle" };
 
+// 状态色与 along-spaces/along-pane 一致：报错红、需要人橙、完成绿、空闲灰。
+// 浮动条的名字和标记都用它，跟左侧列表里同一 pane 的颜色对上。
+const STATE = {
+  error: "#e5484d",
+  blocked: "#e3814f",
+  done: "#3fae6a",
+  idle: "#8f8f8f",
+  working: "#4ade80",
+};
+const stateColor = (status) => STATE[status] ?? STATE.idle;
+
 // A name given to the pane or its agent row (along.names), so the float bar
 // reads the same as both.
 function customName(address) {
@@ -299,10 +310,10 @@ export default class Float extends View {
       .border_b(1)
       .border_color(t.border)
       .text_size(12)
-      .child(div().w(12).flex_none().text_color(t[st] ?? t.dim).when(st === "working", (el) => el.frames(SPIN, 90)).child(glyph))
+      .child(div().w(12).flex_none().text_color(st ? stateColor(st) : t.dim).when(st === "working", (el) => el.frames(SPIN, 90)).child(glyph))
       .when(Boolean(pic), (el) => el.child(pic))
-      .child(div().truncate().font_semibold().text_color(t.foreground).child(customName(terminal) || k?.name || k?.template || k?.program?.name || terminal || ""))
-      .when(Boolean(st), (el) => el.child(div().flex_none().text_color(t[st] ?? t.dim).child(WORDS[st] ?? st)))
+      .child(div().truncate().font_semibold().text_color(st ? stateColor(st) : t.foreground).child(customName(terminal) || k?.name || k?.template || k?.program?.name || terminal || ""))
+      .when(Boolean(st), (el) => el.child(div().flex_none().text_color(stateColor(st)).child(WORDS[st] ?? st)))
       .child(div().flex_1())
       .child(this.button(t, "drop", "", (_e, cx) => this.back(cx), "back", pending)
         .tooltip(pending ? "正在准备悬浮 pane" : "落回当前聚焦 pane；找不到目标时使用来源 pane兜底"))

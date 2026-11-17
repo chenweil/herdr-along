@@ -2,10 +2,13 @@
 
 Along adds practical file and machine tools to Herdr. Its sidebar puts each
 space's agents under the space's own row, one list with a state mark per
-agent. The list keeps itself up to date: an agent that starts, ends, moves
-space or changes state redraws on its own, and an agent program that reports
-no status still gets a row. Panes and agent rows can be renamed in place.
-Its panels add
+agent, joined to the space by a tree line. Each state has its own colour —
+working green, done a deeper green, blocked orange, error red, idle grey —
+and the agent's name carries it too, in the sidebar, the pane header and the
+float bar. The list keeps itself up to date: an agent that starts, ends,
+moves space or changes state redraws on its own, and an agent program that
+reports no status still gets a row. Panes and agent rows can be renamed in
+place. Its panels add
 right-click path copying to Files and Changes plus a Machines button. That
 dialog lists herdr-core machines and enables or disables them, and its heading
 carries "+ Add machine" for adding a new one. The full layout also adds
@@ -16,7 +19,7 @@ Two packages, one repo:
 
 | Folder | Kind | Version | What it is |
 | --- | --- | --- | --- |
-| [`along/`](along/) | layout | 0.4.6 | The complete Along window: Files, Changes, Machines, explicit pane floating controls and pane renaming. Start here. |
+| [`along/`](along/) | layout | 0.4.7 | The complete Along window: Files, Changes, Machines, explicit pane floating controls and pane renaming. Start here. |
 | [`along-panels/`](along-panels/) | mod | 0.3.0 | Four mods without a layout, for a window you already arranged. Files and Changes carry their own Machines button. Files docks on the right; Changes is there for you to place. |
 
 Each folder has its own `RECIPE.md` (the brief another agent builds it from)

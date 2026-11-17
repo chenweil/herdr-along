@@ -15,6 +15,17 @@ import { panes, props, run, openOverlay, closeOverlay, theme, home, layout, spac
 // app 画在 pane 顶边中央的拖拽把手（grip），窄 pane 里点不到按钮。
 const NARROW = 320;
 
+// 状态色与 along-spaces 一致：报错红、需要人橙、完成绿、空闲灰、工作中蓝。
+// 名字的颜色跟着状态变，一眼能看出哪个 pane 在等你。
+const STATE = {
+  error: "#e5484d",
+  blocked: "#e3814f",
+  done: "#3fae6a",
+  idle: "#8f8f8f",
+  working: "#4ade80",
+};
+const stateColor = (status) => STATE[status] ?? STATE.idle;
+
 // Along keeps its own names for panes and agents: the core has no name for a
 // pane, so the name lives in shared state, where every mod sees it. The key
 // is the terminal's address (a pane with no terminal keys on the pane itself),
@@ -264,6 +275,8 @@ export default class Pane extends View {
     const name = customName(key) || paneName(p);
     const pic = icon(p.program, 14, t.dim);
     const st = p.status;
+    // 有状态就用状态色，没有（普通程序）就保持原色。
+    const nameTone = st ? stateColor(st) : t.foreground;
     const pane = p.pane;
     const bottom = paneFrame(layout())?.header?.position === "bottom";
     return h_flex()
@@ -323,7 +336,7 @@ export default class Pane extends View {
         .truncate()
         .max_w(260)
         .font_medium()
-        .text_color(t.foreground)
+        .text_color(nameTone)
         .cursor_text()
         .tooltip("Click to rename")
         .on_click((_e, cx) => {
@@ -332,9 +345,9 @@ export default class Pane extends View {
         })
         .child(name)))
       .child(div().flex_1().truncate().text_color(t.dim).child(folder(p.cwd)))
-      .when(st === "working", el => el.child(svg("mods/workspace-chrome/spinner.svg").size(12).flex_none().text_color(t.working).spin(900)))
-      .when(st === "blocked", el => el.child(div().flex_none().px(6).h(18).flex().items_center().rounded(5).bg(t.blocked + "26").text_size(10.5).font_semibold().text_color(t.blocked).child("Needs you")))
-      .when(st === "done", el => el.child(div().size(7).flex_none().rounded(4).bg(t.done)))
+      .when(st === "working", el => el.child(svg("mods/workspace-chrome/spinner.svg").size(12).flex_none().text_color(stateColor("working")).spin(900)))
+      .when(st === "blocked", el => el.child(div().flex_none().px(6).h(18).flex().items_center().rounded(5).bg(stateColor("blocked") + "26").text_size(10.5).font_semibold().text_color(stateColor("blocked")).child("Needs you")))
+      .when(st === "done", el => el.child(div().size(7).flex_none().rounded(4).bg(stateColor("done"))))
       .when(this.hovered || this.menu, el => el
         .when(this.narrow(), el2 => el2.child(this.more(t, pane, p)))
         .when(!this.narrow(), el2 => el2
