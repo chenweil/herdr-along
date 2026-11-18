@@ -155,6 +155,8 @@ export default class Spaces extends View {
       for (const state of Object.values(this.reconnecting)) state.busy = false;
     } catch { this.reconnecting = {}; }
     try { this.folded = new Set(JSON.parse(localStorage.getItem("machines.folded") ?? "[]")); } catch { this.folded = new Set(); }
+    // 每个 space 的 agent 行折叠状态，跨重启记住。
+    try { this.spaceFolded = new Set(JSON.parse(localStorage.getItem("spaces.folded") ?? "[]")); } catch { this.spaceFolded = new Set(); }
     // Where each agent sat while it was live: a parked one (a float, "Send
     // back") has no pane, so agents() drops it and this is the only home left.
     try { this.homes = JSON.parse(localStorage.getItem("agent.homes") ?? "{}"); } catch { this.homes = {}; }
@@ -517,8 +519,10 @@ export default class Spaces extends View {
       .child(div().absolute().left(tree ? -5 : -10).top(0).bottom(0).w(1).bg(t.border));
   }
 
-  // The rows under one space's row: each agent, then its live sub-agents unless folded.
+  // The rows under one space's row: each agent, then its live sub-agents unless
+  // folded. A space folded by its chevron shows none of them.
   agentRows(w, tree, t) {
+    if (this.spaceFolded.has(w.id)) return [];
     const list = this.bySpace.get(w.id);
     if (!list?.length) return [];
     const pl = tree ? 64 : 50;
@@ -730,6 +734,7 @@ export default class Spaces extends View {
     const colors = shared("space.colors") ?? {};
     const color = colors[w.id] ?? "ansi6";
     const fill = color.startsWith("#") ? color : (MARK[color] ?? t[color]);
+    const hasKids = (this.bySpace.get(w.id) ?? []).length > 0;
     return v_flex()
       .relative()
       .id(`space-${w.id}`)
@@ -777,6 +782,17 @@ export default class Spaces extends View {
           .when(Boolean(tree), el => el.pl(22).child(svg("mods/workspace-chrome/branch.svg").size(13).flex_none().text_color(t.dim)))
           .when(!tree, el => el.child(h_flex().size(18).flex_none().rounded(5).bg(fill).items_center().justify_center().text_size(10.5).font_bold().text_color("#ffffff").child([...w.name][0]?.toUpperCase() ?? "?")))
           .child(div().flex_initial().min_w(SIDE_MIN).truncate().text_color(t.foreground).child(w.name))
+          // 折叠箭头贴在名字后面：有 agent 的 space 才有，点击只折叠这组行。
+          .when(hasKids, el => el.child(div().id(`ag-fold-${w.id}`).flex_none().flex().items_center()
+            .text_color(t.dim).hover(s => s.text_color(t.foreground))
+            .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+            .on_click((_e, cx) => {
+              cx.stop_propagation();
+              this.spaceFolded.has(w.id) ? this.spaceFolded.delete(w.id) : this.spaceFolded.add(w.id);
+              localStorage.setItem("spaces.folded", JSON.stringify([...this.spaceFolded]));
+              cx.notify();
+            })
+            .child(svg(`mods/workspace-chrome/chevron-${this.spaceFolded.has(w.id) ? "right" : "down"}.svg`).size(11))))
           .child(g ? this.gitTail(g, tree, w.name, t) : div().flex_1()),
       );
   }
