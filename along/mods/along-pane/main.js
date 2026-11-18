@@ -215,6 +215,10 @@ export default class Pane extends View {
           layout: {
             id: "along-float",
             type: "column",
+            // 悬浮 pane 的选中高亮：和主布局里聚焦的 pane 一样，
+            // 1px accent 描边加同样的圆角，一眼能认出这是飘起来的那个。
+            border: { width: 1, color: "accent" },
+            radius: 10,
             children: [
               { id: "along-float-bar", type: "block", size: { px: 34 }, content: { mod: "along-float", props: { terminal } } },
               { id: "along-float-term", type: "block", weight: 1, content: { terminal } }

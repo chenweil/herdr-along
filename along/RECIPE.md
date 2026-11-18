@@ -8,7 +8,7 @@ under the space's own row, one list with a state mark per agent.
 
 ![Along](preview.png)
 
-Version 0.4.7. See [CHANGELOG.md](CHANGELOG.md) for what changed.
+Version 0.4.8. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 This file is the brief: enough to build Along from an empty folder. The
 files next to it are one build of it. If they don't work on your Herdr, or you
@@ -31,7 +31,8 @@ button, and Float controls and click-to-rename names in pane headers.
   panel is opened, holding Files and Changes as a stack with Files in front.
   Terminals get 14px of horizontal and 12px of vertical padding, and panes
   are 10px-radius cards with a 1px border that turns into the accent color
-  when focused.
+  when focused. A floated pane's window repeats that accent border and
+  10px radius around the float bar and terminal.
 - **The Files panel.** A rounded 10px card on the theme background with a 1px
   border and 13px text. Header 42px: "Files" in semibold and the shown
   folder's name right-aligned in dim 12px. Rows are 28px, indented 18px per
@@ -163,7 +164,9 @@ button, and Float controls and click-to-rename names in pane headers.
     `shared("along.floats.origins")`, then parks the pane's terminal with
     `terminal.park` (the terminal keeps running without a pane) and opens a
     `kind: "window"` overlay whose layout holds the along-float bar and a
-    `{ terminal }` block. Main-pane clicks record the current target by tab
+    `{ terminal }` block. The layout root carries the pane's selected look:
+    `border: { width: 1, color: "accent" }` and `radius: 10`, so the float
+    reads as the focused pane. Main-pane clicks record the current target by tab
     in `shared("along.floats.targets")`. Herdr does not expose a reliable
     dragged-overlay rectangle or all pane rectangles, so Along deliberately
     does not infer a drop target from the float's visual position.
@@ -264,7 +267,8 @@ button, and Float controls and click-to-rename names in pane headers.
   and Enable brings it back with its target.
 - Hovering a pane header shows the Float button; clicking it removes the
   pane from the layout and opens a draggable floating window holding the
-  same terminal, with the along-float bar on top. While it is preparing,
+  same terminal, with the along-float bar on top and the focused pane's 1px
+  accent border around the whole window. While it is preparing,
   the drop controls are disabled. Click a main-layout pane to focus the
   desired target, then use `←`, `→`, `↑` or `↓` to split the terminal beside
   that target. If no target is available, the chosen direction is tried

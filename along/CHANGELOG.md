@@ -2,6 +2,13 @@
 
 Earlier builds did not carry a version number; this log starts at 0.3.0.
 
+## 0.4.8 - 2026-11-18
+
+- A floated pane's window now carries the focused pane's selected border:
+  a 1px accent outline with the pane card's 10px radius around the float
+  bar and terminal, so a float reads as the selected pane rather than a
+  plain window.
+
 ## 0.4.7 - 2026-11-18
 
 - State colours: one fixed palette for every mark and every name, in the

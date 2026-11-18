@@ -13,13 +13,13 @@ right-click path copying to Files and Changes plus a Machines button. That
 dialog lists herdr-core machines and enables or disables them, and its heading
 carries "+ Add machine" for adding a new one. The full layout also adds
 explicit pane floating and left/right/up/down controls for returning a float
-to the workspace.
+to the workspace; a float's window carries the focused pane's accent border.
 
 Two packages, one repo:
 
 | Folder | Kind | Version | What it is |
 | --- | --- | --- | --- |
-| [`along/`](along/) | layout | 0.4.7 | The complete Along window: Files, Changes, Machines, explicit pane floating controls and pane renaming. Start here. |
+| [`along/`](along/) | layout | 0.4.8 | The complete Along window: Files, Changes, Machines, explicit pane floating controls and pane renaming. Start here. |
 | [`along-panels/`](along-panels/) | mod | 0.3.0 | Four mods without a layout, for a window you already arranged. Files and Changes carry their own Machines button. Files docks on the right; Changes is there for you to place. |
 
 Each folder has its own `RECIPE.md` (the brief another agent builds it from)
