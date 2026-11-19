@@ -8,7 +8,7 @@ under the space's own row, one list with a state mark per agent.
 
 ![Along](preview.png)
 
-Version 0.4.8. See [CHANGELOG.md](CHANGELOG.md) for what changed.
+Version 0.4.9. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 This file is the brief: enough to build Along from an empty folder. The
 files next to it are one build of it. If they don't work on your Herdr, or you
@@ -49,10 +49,16 @@ button, and Float controls and click-to-rename names in pane headers.
 - **The commit bar.** At the bottom of Changes, a 32px rounded message input
   and a 32px "Commit" button. The button is filled with the theme's solid
   color only when the message is non-empty and no other git work is running.
-- **The right-click menu.** A 210px popup with 5px padding on the theme's
-  popover color and 12.8px text. Rows are 31px high with a 14px copy icon:
-  "Copy Path", "Copy Relative Path", "Copy Name". A row whose value is empty
-  or repeats an earlier row is dropped, so the menu can show fewer than three.
+- **The pane right-click menu.** 280×260, popover color, 12.8px text, 31px
+  rows with a 14px icon and the key hint on the right: Split right, Split
+  down, Zoom (Unzoom when the pane is zoomed), Send right-clicks to pane,
+  Send back to a parent, Close pane, with a separator above Close. Split
+  right/down and Zoom/Unzoom use the pane header's own icons.
+- **The Files and Changes right-click menu.** A 210px popup with 5px padding
+  on the theme's popover color and 12.8px text. Rows are 31px high with a
+  14px copy icon: "Copy Path", "Copy Relative Path", "Copy Name". A row whose
+  value is empty or repeats an earlier row is dropped, so the menu can show
+  fewer than three.
 - **The Machines dialog.** 460×380, popover color, 12px padding, 13px text. A
   heading row "Machines" with "enable / disable" in dim 11px and a "+ Add
   machine" button that opens the machine-add dialog, then one 36px
@@ -62,6 +68,9 @@ button, and Float controls and click-to-rename names in pane headers.
 
 ## How it behaves
 
+- Right-clicking a pane (or Shift+right-clicking a terminal whose program
+  takes the mouse) opens Along's pane menu, with the pane header's split and
+  zoom icons and the bound key on the right.
 - Right-clicking any row in Files or Changes opens the menu for that row. In
   Files it works on folders and files; in Changes on changed files.
 - "Copy Path" is absolute (`/home/me/project/src/main.js`, or
@@ -139,8 +148,9 @@ button, and Float controls and click-to-rename names in pane headers.
 ## Built from
 
 - **The layout**, `layouts/along.json`: a copy of the shipped `main` tree with
-  `titlebar: "none"`, `traffic_lights: [12, 16]`, `terminal_padding:
-  [14, 12]` and a 1px `border` divider. Its right column is `hidden: true`,
+  `titlebar: "none"`, `terminal_menu: "along-pane-menu"`, `traffic_lights:
+  [12, 16]`, `terminal_padding: [14, 12]` and a 1px `border` divider. Its
+  right column is `hidden: true`,
   368px, min 280, max 900, and holds a `stack` with `active: "files"` and two
   blocks, `content: { mod: "along-files" }` and `content: { mod:
   "along-changes" }`. The tab bar points at `along-tabs` and the pane header
@@ -148,7 +158,7 @@ button, and Float controls and click-to-rename names in pane headers.
   shipped mods:
   `along-chrome` (brand), `along-spaces` (spaces with their agents), `pane`,
   `workspace-status`.
-- **Ten mods**, all `"place": "none"` so only the layout decides where they
+- **Eleven mods**, all `"place": "none"` so only the layout decides where they
   show:
   - `along-chrome/` — the shipped `workspace-chrome` mod with a Settings
     button in the brand row, left of the search button; it carries the
@@ -170,6 +180,11 @@ button, and Float controls and click-to-rename names in pane headers.
     in `shared("along.floats.targets")`. Herdr does not expose a reliable
     dragged-overlay rectangle or all pane rectangles, so Along deliberately
     does not infer a drop target from the float's visual position.
+  - `along-pane-menu/` — the pane right-click menu. The app opens it because
+    the layout root sets `terminal_menu`. It keeps the shipped pane items and
+    key hints; Split right/down and Zoom/Unzoom draw `mods/along-pane/…` so
+    the menu matches the pane header, and Zoom reads the pane's `zoomed` state
+    to show Unzoom. The rest of the icons come from `mods/workspace-chrome/`.
   - `along-float/` — the floating window's bar, a copy of the shipped
     `peek` bar. Shows the program icon, the custom name (else its own) and
     agent status; the four
@@ -231,11 +246,12 @@ button, and Float controls and click-to-rename names in pane headers.
 - The Machines dialog runs `hc` and can remove machines from herdr-core. A
   disabled machine's spaces disappear from the window until it is enabled
   again; its terminals keep running in the core.
-- These are copies of the shipped `files`, `changes` and `tabs` mods, so they
-  do not follow upstream fixes. When Herdr updates, re-copy
-  `defaults/mods/files/`, `defaults/mods/changes/` and `defaults/mods/tabs/`
-  and re-apply the right-click and Machines additions. This copy was synced
-  against herdr-app 0.1.11.
+- These are copies of the shipped `files`, `changes`, `tabs` and `menu` mods,
+  so they do not follow upstream fixes. When Herdr updates, re-copy
+  `defaults/mods/files/`, `defaults/mods/changes/`, `defaults/mods/tabs/` and
+  `defaults/mods/menu/` and re-apply the right-click, Machines and icon
+  additions. The panels were synced against herdr-app 0.1.11; the pane menu
+  against 0.1.16.
 - The `mods/along-files/…` asset paths, the `mod` names in the layout and the
   `mod` names in the `openOverlay` calls all name the same five folders.
   Renaming any of them means changing all of them.
@@ -251,11 +267,14 @@ button, and Float controls and click-to-rename names in pane headers.
 ## Done when
 
 - `herdr-app check mods/along-files`, `mods/along-changes`, `mods/along-menu`,
-  `mods/along-machines`, `mods/along-tabs`, `mods/along-pane`, `mods/along-float`,
-  `mods/along-spaces` and `mods/along-chrome` pass.
+  `mods/along-machines`, `mods/along-tabs`, `mods/along-pane`,
+  `mods/along-pane-menu`, `mods/along-float`, `mods/along-spaces` and
+  `mods/along-chrome` pass.
 - Switching to `along` (`ctrl-shift-l`, or `layout.switch along`) shows the
   sidebar, the tab bar with Machines next to Files and Changes, the terminals
   and the right panel with Files in front.
+- Right-clicking a pane opens the pane menu; Split right/down and Zoom match
+  the header's icons, and a zoomed pane reads Unzoom.
 - Right-clicking a file row in Files opens the menu; each item puts the right
   string on the clipboard, and "Copy Relative Path" starts at the shown
   folder.

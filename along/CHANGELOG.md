@@ -2,6 +2,14 @@
 
 Earlier builds did not carry a version number; this log starts at 0.3.0.
 
+## 0.4.9 - 2026-11-19
+
+- The pane right-click menu now draws the pane header's icons: Split right
+  is a framed pane cut vertically, Split down cut horizontally, and Zoom is
+  the header's outward arrows (Unzoom once the pane is zoomed). Along ships
+  the menu as `along-pane-menu` and points the layout's `terminal_menu` at
+  it; at 280px wide, "Send right-clicks to pane" no longer truncates.
+
 ## 0.4.8 - 2026-11-18
 
 - A floated pane's window now carries the focused pane's selected border:
