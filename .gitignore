@@ -5,3 +5,7 @@ herdr.d.ts
 
 # macOS
 .DS_Store
+
+# 本地 agent 配置（不入库）
+.agents/
+.claude/
