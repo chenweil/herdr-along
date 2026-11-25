@@ -21,7 +21,7 @@ Two packages, one repo:
 
 | Folder | Kind | Version | What it is |
 | --- | --- | --- | --- |
-| [`along/`](along/) | layout | 0.4.10 | The complete Along window: Files, Changes, Machines, explicit pane floating controls and pane renaming. Start here. |
+| [`along/`](along/) | layout | 0.4.11 | The complete Along window: Files, Changes, Machines, explicit pane floating controls and pane renaming. Start here. |
 | [`along-panels/`](along-panels/) | mod | 0.3.0 | Four mods without a layout, for a window you already arranged. Files and Changes carry their own Machines button. Files docks on the right; Changes is there for you to place. |
 
 Each folder has its own `RECIPE.md` (the brief another agent builds it from)
@@ -58,6 +58,13 @@ that shows `along-files` to your layout.
 
 Choose `along/` when you want the complete layout. Choose `along-panels/` when
 you already have a layout and only want the Files, Changes and Machines tools.
+
+Optional: `along/program-icons/` carries two PNGs that give CodeBuddy and
+MiniMax Code their own mark in Herdr's program table instead of the generic
+`agent.svg`. They are not part of the layout; `sh along/program-icons/install.sh`
+copies them into `my-icons/` and merges the two entries into `programs.json`
+(creating both when the machine has neither). See
+[its README](along/program-icons/README.md).
 
 ## What it runs
 

@@ -8,7 +8,7 @@ under the space's own row, one list with a state mark per agent.
 
 ![Along](preview.png)
 
-Version 0.4.10. See [CHANGELOG.md](CHANGELOG.md) for what changed.
+Version 0.4.11. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 This file is the brief: enough to build Along from an empty folder. The
 files next to it are one build of it. If they don't work on your Herdr, or you
@@ -236,6 +236,16 @@ button, and Float controls and click-to-rename names in pane headers.
 - **Art:** four SVGs in `along-files/` (chevron down, chevron right, file,
   folder) and one copy icon in `along-menu/`. They are the shipped panels'
   icons.
+- **Program icons**, `program-icons/` (optional): two PNGs that give CodeBuddy
+  and MiniMax Code their own mark in the app's program table, where both
+  otherwise show the generic `icons/agent.svg`. Herdr has no entry for either
+  program and `icons/` belongs to Herdr, so the files go into
+  `~/.config/herdr-app/my-icons/` and two entries are merged into
+  `programs.json` (per-machine config). The layout and the mods never
+  reference them: leave the folder out and Along is unchanged. `install.sh`
+  there does both steps (it creates `my-icons/` and `programs.json` on a
+  machine that has neither, backs the file up, and only replaces those two
+  entries); `program-icons/README.md` has the same steps by hand.
 
 ## Watch out
 

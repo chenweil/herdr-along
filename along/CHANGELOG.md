@@ -2,6 +2,20 @@
 
 Earlier builds did not carry a version number; this log starts at 0.3.0.
 
+## 0.4.11 - 2026-11-25
+
+- `program-icons/` gives CodeBuddy and MiniMax Code their own mark in Herdr's
+  program table: the CodeBuddy app's purple tile with the white cat, and
+  MiniMax Code's blue jellyfish flattened to a gradient so it stays readable
+  at the 14px the sidebar draws. Herdr ships no entry for either program, so
+  both showed the generic `agent.svg`.
+- `program-icons/install.sh` copies the two PNGs into `my-icons/` (not
+  `icons/`, which Herdr writes itself) and merges two entries into
+  `programs.json`, backing the file up first. It creates both on a machine
+  that has neither and replaces only those two entries when run again. The
+  layout and the mods never reference them, so leaving the folder out changes
+  nothing.
+
 ## 0.4.10 - 2026-11-25
 
 - The collapsed rail no longer draws a rounded background block behind a
