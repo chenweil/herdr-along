@@ -8,7 +8,7 @@ under the space's own row, one list with a state mark per agent.
 
 ![Along](preview.png)
 
-Version 0.4.9. See [CHANGELOG.md](CHANGELOG.md) for what changed.
+Version 0.4.10. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 This file is the brief: enough to build Along from an empty folder. The
 files next to it are one build of it. If they don't work on your Herdr, or you

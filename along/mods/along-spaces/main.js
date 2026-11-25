@@ -808,13 +808,12 @@ export default class Spaces extends View {
       : div().size(5).flex_none().rounded(2.5).bg(stateColor(a.status)));
     const rows = [];
     for (let n = 0; n < marks.length; n += 4) rows.push(marks.slice(n, n + 4));
+    // The rail has no background block behind a space's number: the number's
+    // colour alone says which space is active, and the marks below stay.
     return railCell(v_flex()
       .id(`space-${w.id}`)
       .w(RAIL_CELL)
       .h(rows.length > 1 ? 34 : 26)
-      .rounded(6)
-      .when(w.active, (el) => el.bg(t.selected))
-      .when(!w.active, (el) => el.hover((s) => s.bg(t.hover)))
       .on_click(() => run("space.select", { id: w.id }))
       .child(h_flex()
         .flex_1()

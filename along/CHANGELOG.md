@@ -2,6 +2,13 @@
 
 Earlier builds did not carry a version number; this log starts at 0.3.0.
 
+## 0.4.10 - 2026-11-25
+
+- The collapsed rail no longer draws a rounded background block behind a
+  space's number: the selected and hover backgrounds are gone, and the
+  number's colour alone says which space is active. The agent state marks
+  under the number stay.
+
 ## 0.4.9 - 2026-11-19
 
 - The pane right-click menu now draws the pane header's icons: Split right
