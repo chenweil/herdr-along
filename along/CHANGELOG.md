@@ -2,6 +2,77 @@
 
 Earlier builds did not carry a version number; this log starts at 0.3.0.
 
+## 0.4.16 - 2026-11-28
+
+- The Machines dialog joins the muted rule: "enable / disable", a machine's
+  state and "No saved machines" were drawn in `dim` (2.6:1 to 3.5:1) and take
+  `muted` now, and its dot for a disabled machine matches the sidebar's. A
+  machine's state also reads as words there — `needs_login` shows as
+  `needs login`, the same as the sidebar's machine row.
+- Icon-only controls announce a name. A control that draws only an icon now
+  carries `role("button")` and an `accessibility_label`: the pane header's
+  Float, Split right, Split down, Zoom/Unzoom and Close and its `⋯`, the float
+  bar's drop icon, four arrows and `✕`, the brand row's Settings, Search, `⋯`
+  and sidebar toggle, the tab bar's `+` and window buttons and a tab's `✕`,
+  the Files panel's `←`, the sidebar's New space, Expand sidebar and fold
+  arrows, and a machine's `⚠` and `+`. A space's "needs you" badge is
+  announced as "2 need you" instead of "2". The float bar's tooltips and its
+  failure notice say the same thing in English now, like the rest of the
+  window. A selected space or
+  agent row reports itself as a selected option. The pane header's buttons are
+  built only while the header is hovered, so they are in the tree only then —
+  the hover reveal is unchanged.
+- A space's avatar colour no longer repeats a state colour. `ansi3` was
+  exactly the blocked orange and `ansi2` exactly the done green, so an
+  orange avatar, an orange "needs you" badge and an orange blocked agent
+  were the same colour on one space row. `ansi3` is now ochre `#c08a2e` and
+  `ansi2` olive `#6f9e2f` — the nearest state colour is 49 and 78 away in
+  RGB — and the letter in the tile keeps its dark ink at 5.9:1 and 5.6:1.
+  The colours stay the space's own: they do not follow the theme.
+
+## 0.4.15 - 2026-11-27
+
+- Key text in the sidebar, the pane header, the float bar and the two panels
+  takes the theme's `muted` colour instead of `dim`: a section heading, a
+  label, a count, a machine name, a folder path and a diff's line numbers were
+  all drawn at 2.6:1 to 3.5:1 on the surface they sat on, under AA's 4.5:1.
+  `muted` gives 4.8:1 to 6.6:1. `dim` is kept where nothing is meant to be
+  read — a disabled button's label and the editor's syntax colours.
+- The traffic-light palette is retuned so an agent's name, which is written in
+  its state colour, clears AA. On a dark surface error `#e5484d` becomes
+  `#ff5f66` and idle `#8f8f8f` becomes `#9b9b9b`; on a light surface
+  working `#1a7f37` becomes `#146b30`, done `#2e7d32` becomes `#2a7a2e`,
+  blocked `#9a6700` becomes `#855700` and idle `#6e7781` becomes
+  `#636a74`. On a light surface the darker hues still sit at 4.0:1 to 4.2:1
+  on the selected row.
+- A letter in a space's avatar is drawn in dark ink (`#15181d`) instead of
+  white, which sat at 2.8:1 on the saturated avatar colours.
+
+## 0.4.14 - 2026-11-27
+
+- Agents that reported `blocked` or `error` gather at the top of the
+  sidebar under a "Needs you" heading, each row named by its space, so an
+  agent waiting in another space shows up without opening that space. The
+  space that holds them carries the number as a badge in the blocked
+  colour. The list under each space is unchanged: the agent still sits
+  where it belongs.
+
+## 0.4.13 - 2026-11-27
+
+- The Changes panel's Commit button stages the paths it lists (`git add --
+  <paths>`, a hundred at a time) instead of `git add -A`, so the commit
+  carries the changes the panel showed rather than every change in the
+  worktree, and the button says how many files it will commit.
+
+## 0.4.12 - 2026-11-27
+
+- Agent states keep the traffic-light palette — working `#4ade80`, done
+  `#3fae6a`, blocked `#e3814f`, error `#e5484d`, idle `#8f8f8f` — and add
+  the same hues as dark ink for a light surface (working `#1a7f37`, done
+  `#2e7d32`, blocked `#9a6700`, error `#c62a2a`, idle `#6e7781`), because
+  the bright hues sat at 1.7 to 2.8:1 on white. The background's own brightness
+  picks the set, so the palette holds in every theme.
+
 ## 0.4.11 - 2026-11-25
 
 - `program-icons/` gives CodeBuddy and MiniMax Code their own mark in Herdr's

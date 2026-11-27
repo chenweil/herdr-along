@@ -5,7 +5,9 @@ space's agents under the space's own row, one list with a state mark per
 agent, joined to the space by a tree line. Each state has its own colour —
 working green, done a deeper green, blocked orange, error red, idle grey —
 and the agent's name carries it too, in the sidebar, the pane header and the
-float bar. The list keeps itself up to date: an agent that starts, ends,
+float bar. Agents that need you also gather at the top of the list under
+"Needs you", each named by its space, and the space that holds them carries
+the count. The list keeps itself up to date: an agent that starts, ends,
 moves space or changes state redraws on its own, and an agent program that
 reports no status still gets a row. Panes and agent rows can be renamed in
 place. Its panels add
@@ -21,7 +23,7 @@ Two packages, one repo:
 
 | Folder | Kind | Version | What it is |
 | --- | --- | --- | --- |
-| [`along/`](along/) | layout | 0.4.11 | The complete Along window: Files, Changes, Machines, explicit pane floating controls and pane renaming. Start here. |
+| [`along/`](along/) | layout | 0.4.16 | The complete Along window: Files, Changes, Machines, explicit pane floating controls and pane renaming. Start here. |
 | [`along-panels/`](along-panels/) | mod | 0.3.0 | Four mods without a layout, for a window you already arranged. Files and Changes carry their own Machines button. Files docks on the right; Changes is there for you to place. |
 
 Each folder has its own `RECIPE.md` (the brief another agent builds it from)

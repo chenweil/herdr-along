@@ -62,18 +62,42 @@ async function both(a, b) {
 
 // What a stored color name looks like on an avatar (the same in every mod
 // that draws space avatars): one strong color per hue, light and dark alike.
-const MARK = { ansi6: "#22a99a", ansi3: "#e3814f", ansi4: "#5b8def", ansi5: "#8b7cf6", ansi2: "#3fae6a", ansi1: "#d9649a" };
+// These are the space's own identity, so they stay put when the theme changes
+// — but they must not be the same value as a state colour: an orange avatar,
+// an orange "needs you" badge and an orange blocked agent all sit on one
+// space row, and one colour for all three says nothing. ansi3 and ansi2 used
+// to be exactly the blocked and done colours; they are ochre and olive now,
+// the nearest state colour 49 and 78 away in RGB.
+const MARK = { ansi6: "#22a99a", ansi3: "#c08a2e", ansi4: "#5b8def", ansi5: "#8b7cf6", ansi2: "#6f9e2f", ansi1: "#d9649a" };
+// 头像里的字母用深墨:白字压在这些饱和色上只有 2.8:1,深墨是 5.3 到 6.1:1。
+const MARK_INK = "#15181d";
 
-// 状态色：报错红、需要人橙、完成绿、空闲灰、工作中蓝。用固定色而不是主题键，
-// 因为主题的 blocked 未必是橙、error 未必是红，而指示灯要一眼能读出来。
+// 状态色是红绿灯三色：工作中绿、需要人橙、完成绿、空闲灰、报错红。
+// 深色主题用饱和原色；浅色主题（白底）用同色相的深墨——亮色在白底上只有 1.7:1。
+// 数字不是随手挑的：agent 的名字就用状态色写，所以每套色都得在两种底上
+// （面板底 chrome、抬起的行底 raised）过 AA 的 4.5:1。
 const STATE = {
-  error: "#e5484d",
-  blocked: "#e3814f",
-  done: "#3fae6a",
-  idle: "#8f8f8f",
-  working: "#4ade80",
+  dark:  { working: "#4ade80", blocked: "#e3814f", done: "#3fae6a", idle: "#9b9b9b", error: "#ff5f66" },
+  light: { working: "#146b30", blocked: "#855700", done: "#2a7a2e", idle: "#636a74", error: "#c62a2a" },
 };
-const stateColor = (status) => STATE[status] ?? STATE.idle;
+
+// 背景亮不亮决定用哪一套色。
+const onLight = (hex) => {
+  const h = (hex ?? "").replace("#", "").slice(0, 6);
+  if (h.length < 6) return false;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return (r + g + b) / 3 > 140;
+};
+
+let lastBg = null;
+let lastState = STATE.dark;
+const stateColor = (t, status) => {
+  if (t.background !== lastBg) {
+    lastBg = t.background;
+    lastState = onLight(t.background) ? STATE.light : STATE.dark;
+  }
+  return lastState[status] ?? lastState.idle;
+};
 
 // Agents sort urgent-first inside their space; pinned ones always first.
 const RANK = { error: 5, blocked: 4, done: 3, working: 2, idle: 1 };
@@ -81,6 +105,8 @@ const RANK = { error: 5, blocked: 4, done: 3, working: 2, idle: 1 };
 // only its state is unknown. One shared rank keeps the list and the rail's
 // mini marks in step.
 const stateRank = (status) => (status == null ? RANK.idle : RANK[status] ?? 0);
+// 需要人:agent 报了 blocked 或 error。sidebar 的承诺就是一眼看出谁在等你。
+const needsYou = (status) => status === "blocked" || status === "error";
 // A sub-agent without a pane isn't in agents(): its raw word, error kept as
 // error so it reads red. It's never done: it reports to its parent, and the
 // parent's done is the news.
@@ -116,7 +142,7 @@ export function glyph(status) {
 }
 
 export function tone(t, status) {
-  return stateColor(status);
+  return stateColor(t, status);
 }
 
 export default class Spaces extends View {
@@ -402,9 +428,9 @@ export default class Spaces extends View {
   // done, an open ring when idle. Compact, so it fits under a space's row.
   // 小状态标：工作中转圈、报错红点、需要人橙 `!`、完成绿点、空闲灰环。均按状态色。
   agentStatus(t, a) {
-    const c = stateColor(a.status);
+    const c = stateColor(t, a.status);
     // No status: an agent program that doesn't report (no OSC 7501).
-    if (a.status == null) return div().size(7).mx(3).flex_none().rounded(4).bg(c + "66");
+    if (a.status == null) return div().size(7).mx(3).flex_none().rounded(4).bg(c + "cc");
     if (a.status === "working") return svg("mods/workspace-chrome/spinner.svg").size(12).mx(1).flex_none().text_color(c).spin(900);
     if (a.status === "blocked") return div().size(14).flex_none().rounded(4).bg(c + "26").text_size(10.5).font_bold().text_color(c).flex().items_center().justify_center().child("!");
     if (a.status === "done") return div().size(7).mx(3).flex_none().rounded(4).bg(c);
@@ -446,7 +472,7 @@ export default class Spaces extends View {
         .when(Boolean(l), el => el.border_l(1.5).border_color(t.input))
         .when(l === "└" || l === "├", el => el.border_b(1.5).rounded_bl(6))))
       .when(Boolean(pic), el => el.child(div().mr(7).child(pic)))
-      .child(div().flex_1().min_w(0).truncate().text_color(stateColor(st)).child(k.name || k.template || k.program?.name || k.address.split("/").pop()))
+      .child(div().flex_1().min_w(0).truncate().text_color(stateColor(t, st)).child(k.name || k.template || k.program?.name || k.address.split("/").pop()))
       .child(this.agentStatus(t, { status: st }));
   }
 
@@ -475,6 +501,8 @@ export default class Spaces extends View {
       // 时不画线（Elsewhere 分组直接列 agent）；最后一行用 └ 收尾。
       .when(last !== null, el => el.child(div().absolute().left(tree ? -5 : -10).top(0).when(last, d => d.h(11)).when(!last, d => d.bottom(0)).w(1).bg(t.border)))
       .when(last !== null, el => el.child(div().absolute().left(tree ? -5 : -10).top(10.5).w(7).h(1).bg(t.border)))
+      .role("list_box_option")
+      .aria_selected(on)
       .when(on, (el) => el.bg(t.selected))
       .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
       .on_click(() => (a.parked ? run("terminal.keep", { terminal: a.address }) : run("pane.focus", { pane: a.pane })))
@@ -483,6 +511,7 @@ export default class Spaces extends View {
         this.beginRename(a, cx);
       })
       .when(Boolean(pic), el => el.child(div().id(`ag-fold-${a.address}`)
+        .when(subs > 0, el => el.role("button").accessibility_label(this.agentFolded.has(a.address) ? "Expand sub-agents" : "Collapse sub-agents"))
         .when(subs > 0, el => el.on_click((_e, cx) => {
           cx.stop_propagation();
           this.agentFolded.has(a.address) ? this.agentFolded.delete(a.address) : this.agentFolded.add(a.address);
@@ -502,10 +531,10 @@ export default class Spaces extends View {
           .bg(t.background)
           .text_size(12)
           .text_color(t.foreground))))
-      .when(this.renaming?.address !== a.address, el => el.child(div().flex_1().min_w(0).truncate().text_color(stateColor(a.status)).tooltip("Right-click to rename").child(name ?? a.rowName)))
-      .when(Boolean(machine), el => el.child(div().flex_none().text_size(10).text_color(t.dim).child(machine)))
-      .when(Boolean(a.parked), el => el.child(div().flex_none().text_size(11).text_color(t.dim).tooltip("Floated · click to bring it back").child("⤢")))
-      .when(subs > 0 && this.agentFolded.has(a.address), el => el.child(div().flex_none().text_size(10.5).text_color(t.dim).child(String(subs))))
+      .when(this.renaming?.address !== a.address, el => el.child(div().flex_1().min_w(0).truncate().text_color(stateColor(t, a.status)).tooltip("Right-click to rename").child(name ?? a.rowName)))
+      .when(Boolean(machine), el => el.child(div().flex_none().text_size(10).text_color(t.muted).child(machine)))
+      .when(Boolean(a.parked), el => el.child(div().flex_none().text_size(11).text_color(t.muted).tooltip("Floated · click to bring it back").child("⤢")))
+      .when(subs > 0 && this.agentFolded.has(a.address), el => el.child(div().flex_none().text_size(10.5).text_color(t.muted).child(String(subs))))
       .child(this.agentStatus(t, a));
   }
 
@@ -608,8 +637,29 @@ export default class Spaces extends View {
   }
 
   // The rows, under a header per machine once one isn't this computer.
+  // 需要人的 agent 汇总在列表最上面:每行带它所属 space 的名字。
+  needsYouRows(t, collapsed) {
+    if (collapsed || !this.urgent?.length) return [];
+    const c = stateColor(t, "blocked");
+    const head = h_flex().id("agents-needs-you").px(8).pt(8).h(26).flex_none().gap(6).items_center()
+      .child(div().text_size(11).font_semibold().text_color(c).child("Needs you"))
+      .child(div().px(5).rounded(4).bg(c + "26").text_size(10).font_semibold().text_color(c).child(String(this.urgent.length)));
+    return [head, ...this.urgent.map((u) => this.agentRow(t, u.agent, false, `${u.space ? `${u.space} · ` : ""}${u.agent.rowName}`))];
+  }
+
+  // 这个 space 里在等人的 agent 数(含子 agent)。
+  needCount(id) {
+    let n = 0;
+    for (const a of this.bySpace.get(id) ?? []) {
+      if (needsYou(a.status)) n++;
+      for (const k of a.kids ?? []) if (needsYou(kidStatus(k.t, this.listed))) n++;
+    }
+    return n;
+  }
+
   grouped(t, collapsed) {
     const rows = this.ordered();
+    const urgent = this.needsYouRows(t, collapsed);
     // Each space's row, then its agents; a worktree row keeps its place after
     // the main checkout's agents and carries its own agents one level deeper.
     const draw = (r) => {
@@ -629,11 +679,12 @@ export default class Spaces extends View {
       return layout === "loading" || (!layout && this.machines.some(k => k.name === m && k.state === "connected"))
         || spaces().some(s => (s.machine ?? null) === m && !this.shown.has(s.id));
     };
-    const loadingRow = m => h_flex().id(`machine-loading-${m ?? "local"}`).h(28).flex_none().px(collapsed ? 0 : 8).items_center().when(collapsed, el => el.justify_center()).text_size(12).text_color(t.dim).child(collapsed ? "…" : "Loading…");
+    const loadingRow = m => h_flex().id(`machine-loading-${m ?? "local"}`).h(28).flex_none().px(collapsed ? 0 : 8).items_center().when(collapsed, el => el.justify_center()).text_size(12).text_color(t.muted).child(collapsed ? "…" : "Loading…");
     if (!remote.length) {
-      if (loading(null) && !rows.length) return [loadingRow(null)];
+      if (loading(null) && !rows.length) return [...urgent, loadingRow(null)];
       this.activeAt = rows.findIndex(r => r.w.active);
-      return rows.flatMap(draw);
+      if (this.activeAt >= 0) this.activeAt += urgent.length;
+      return [...urgent, ...rows.flatMap(draw)];
     }
     const machineNames = [null, ...remote];
     const list = machineNames.flatMap((m) => {
@@ -645,8 +696,8 @@ export default class Spaces extends View {
       const login = machine?.state === "needs_login" ? `hc machine login ${m}` : null;
       const folded = this.folded.has(m);
       const icon = svg(`mods/workspace-chrome/${m ? "server" : "monitor"}.svg`).size(13).flex_none();
-      const badge = div().absolute().right(-3).bottom(-2).size(6).rounded(3).border_1().border_color(t.chrome).bg(connected ? t.ansi2 : t.dim);
-      const head = h_flex().id(`machine-${m ?? "local"}`).h(26).flex_none().px(collapsed ? 0 : 8).gap(7).items_center().text_size(11).text_color(t.dim)
+      const badge = div().absolute().right(-3).bottom(-2).size(6).rounded(3).border_1().border_color(t.chrome).bg(connected ? t.ansi2 : t.muted);
+      const head = h_flex().id(`machine-${m ?? "local"}`).h(26).flex_none().px(collapsed ? 0 : 8).gap(7).items_center().text_size(11).text_color(t.muted)
         .when(collapsed, el => el.mt(4).w(RAIL_CELL).justify_center().rounded(6).tooltip(login ? `${m} needs a login: run ${login}. Click for Copy.` : m ? `${m} · ${connected ? "connected" : (machine?.state ?? "asleep").replace(/_/g, " ")}` : "This computer"))
         .cursor_pointer().hover(s => s.bg(t.hover))
         .on_click((_e, cx) => {
@@ -657,6 +708,7 @@ export default class Spaces extends View {
         })
         .when(machine?.keeps_running_after_logout === false, el => el.child(div().id(`machine-logout-${m}`)
           .flex_none().text_color(t.blocked).tooltip("Agents stop when you disconnect. Click for the fix.")
+          .role("button").accessibility_label("Agents stop when you disconnect")
           .on_click((_e, cx) => { cx.stop_propagation(); openOverlay({ mod: "machine-add", kind: "dialog", width: 560 }); }).child("⚠")))
         .when(!collapsed, el => el.child(icon))
         .when(collapsed, el => el.child(div().relative().flex_none().child(icon).when(Boolean(m), el => el.child(badge))))
@@ -670,14 +722,16 @@ export default class Spaces extends View {
               .on_click((_e, cx) => { cx.stop_propagation(); this.reconnect(machine, cx); })
               .child(repair?.busy ? "Connecting…" : "Connect"))))
           .when(connected, el => el.child(div().id(`machine-add-${m ?? "local"}`).flex_none().px(4).rounded(4).hover(s => s.bg(t.hover).text_color(t.foreground))
+            .role("button").accessibility_label(`New space on ${m ?? "this computer"}`)
             .on_click((_e, cx) => { cx.stop_propagation(); run("space.new", { machine: m ?? "" }); }).child("+")))
-          .child(div().size(6).rounded(3).flex_none().bg(connected ? t.ansi2 : t.dim))
+          .child(div().size(6).rounded(3).flex_none().bg(connected ? t.ansi2 : t.muted))
           .child(svg(`mods/workspace-chrome/chevron-${folded ? "right" : "down"}.svg`).size(11).flex_none()));
       const empty = h_flex().id(`machine-new-${m ?? "local"}`).h(28).flex_none().px(collapsed ? 0 : 8).gap(7).items_center().rounded(7)
-        .text_size(12).text_color(t.dim).hover(s => s.bg(t.hover).text_color(t.foreground))
+        .text_size(12).text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
+        .role("button").accessibility_label(`New space on ${m ?? "this computer"}`)
         .on_click(() => run("space.new", { machine: m ?? "" }))
         .when(collapsed, el => el.w(RAIL_CELL).rounded(6).justify_center().tooltip(`New space on ${m ?? "this computer"}`)
-          .child(h_flex().size(18).rounded(5).border_1().border_color(t.dim).items_center().justify_center()
+          .child(h_flex().size(18).rounded(5).border_1().border_color(t.muted).items_center().justify_center()
             .child(svg("mods/workspace-chrome/plus.svg").size(10))))
         .when(!collapsed, el => el.child(svg("mods/workspace-chrome/plus.svg").size(12)).child("New space there"));
       if (!collapsed && rebuilt) { before += 1; return [head]; }
@@ -699,10 +753,11 @@ export default class Spaces extends View {
     // Agents of no listed space: a machine away, or a space that closed under
     // them. Gathered at the end, each still named by its space.
     if (!collapsed && this.orphans.length) {
-      const head = h_flex().id("agents-elsewhere").px(8).pt(8).h(26).flex_none().items_center().text_size(11).text_color(t.dim).child("Elsewhere");
+      const head = h_flex().id("agents-elsewhere").px(8).pt(8).h(26).flex_none().items_center().text_size(11).text_color(t.muted).child("Elsewhere");
       list.push(head, ...this.orphans.map(a => this.agentRow(t, a, false, `${a.space_name ? `${a.space_name} · ` : ""}${a.rowName}`)));
     }
-    return list;
+    if (this.activeAt >= 0) this.activeAt += urgent.length;
+    return [...urgent, ...list];
   }
 
   // Only what's unusual, after the name: "herdr \u00b7 spike \u21912 \u21931". The repo or
@@ -722,7 +777,7 @@ export default class Spaces extends View {
       .justify_end()
       .items_center()
       .text_size(11.5)
-      .text_color(t.dim)
+      .text_color(t.muted)
       .when(Boolean(where), (el) => el.child(div().min_w(0).truncate().child(where)))
       .when(g.ahead > 0, (el) => el.child(div().flex_none().text_color(t.ansi2).child(`\u2191${g.ahead}`)))
       .when(g.behind > 0, (el) => el.child(div().flex_none().text_color(t.ansi1).child(`\u2193${g.behind}`)));
@@ -735,6 +790,8 @@ export default class Spaces extends View {
     const color = colors[w.id] ?? "ansi6";
     const fill = color.startsWith("#") ? color : (MARK[color] ?? t[color]);
     const hasKids = (this.bySpace.get(w.id) ?? []).length > 0;
+    const need = this.needCount(w.id);
+    const needColor = stateColor(t, "blocked");
     return v_flex()
       .relative()
       .id(`space-${w.id}`)
@@ -743,6 +800,8 @@ export default class Spaces extends View {
       .flex_none()
       .justify_center()
       .rounded(8)
+      .role("list_box_option")
+      .aria_selected(on)
       .when(on, (el) => el.bg(t.selected))
       .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
       .when(this.pressed === w.id && this.over !== w.id, (el) => el.opacity(0.5))
@@ -779,12 +838,16 @@ export default class Spaces extends View {
         h_flex()
           .gap(9)
           .items_center()
-          .when(Boolean(tree), el => el.pl(22).child(svg("mods/workspace-chrome/branch.svg").size(13).flex_none().text_color(t.dim)))
-          .when(!tree, el => el.child(h_flex().size(18).flex_none().rounded(5).bg(fill).items_center().justify_center().text_size(10.5).font_bold().text_color("#ffffff").child([...w.name][0]?.toUpperCase() ?? "?")))
+          .when(Boolean(tree), el => el.pl(22).child(svg("mods/workspace-chrome/branch.svg").size(13).flex_none().text_color(t.muted)))
+          .when(!tree, el => el.child(h_flex().size(18).flex_none().rounded(5).bg(fill).items_center().justify_center().text_size(10.5).font_bold().text_color(MARK_INK).child([...w.name][0]?.toUpperCase() ?? "?")))
           .child(div().flex_initial().min_w(SIDE_MIN).truncate().text_color(t.foreground).child(w.name))
+          // 需要人的 agent 数:不展开这个 space 也知道它要找你。
+          .when(need > 0, el => el.child(div().id(`ag-need-${w.id}`).flex_none().px(5).h(16).rounded(4).bg(needColor + "26").text_size(10).font_semibold().text_color(needColor).items_center().justify_center().tooltip(`${need} need you`).accessibility_label(`${need} need you`).child(String(need))))
           // 折叠箭头贴在名字后面：有 agent 的 space 才有，点击只折叠这组行。
           .when(hasKids, el => el.child(div().id(`ag-fold-${w.id}`).flex_none().flex().items_center()
-            .text_color(t.dim).hover(s => s.text_color(t.foreground))
+            .role("button")
+            .accessibility_label(this.spaceFolded.has(w.id) ? "Expand agents" : "Collapse agents")
+            .text_color(t.muted).hover(s => s.text_color(t.foreground))
             .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
             .on_click((_e, cx) => {
               cx.stop_propagation();
@@ -804,8 +867,8 @@ export default class Spaces extends View {
     // Idle dots are dim; working spins; done is a dot in the theme's done color.
     const ags = [...(this.bySpace.get(w.id) ?? [])].sort((x, y) => stateRank(y.status) - stateRank(x.status));
     const marks = ags.slice(0, 8).map((a) => a.status === "working"
-      ? svg("mods/workspace-chrome/spinner.svg").size(8).flex_none().text_color(stateColor("working")).spin(900)
-      : div().size(5).flex_none().rounded(2.5).bg(stateColor(a.status)));
+      ? svg("mods/workspace-chrome/spinner.svg").size(8).flex_none().text_color(stateColor(t, "working")).spin(900)
+      : div().size(5).flex_none().rounded(2.5).bg(stateColor(t, a.status)));
     const rows = [];
     for (let n = 0; n < marks.length; n += 4) rows.push(marks.slice(n, n + 4));
     // The rail has no background block behind a space's number: the number's
@@ -924,6 +987,20 @@ export default class Spaces extends View {
     const byUrgency = (x, y) => rank(y) - rank(x) || y.seq - x.seq;
     for (const l of this.bySpace.values()) l.sort(byUrgency);
     this.orphans.sort(byUrgency);
+    // 需要人的 agent 汇总:跨 space 也能一眼看到,不用逐个 space 展开去找。
+    this.urgent = [];
+    const seen = new Set();
+    const addUrgent = (a, spaceName) => {
+      if (seen.has(a.address) || !needsYou(a.status)) return;
+      seen.add(a.address);
+      this.urgent.push({ agent: a, space: spaceName });
+    };
+    for (const [id, list] of this.bySpace) {
+      const name = sp.find((s) => s.id === id)?.name ?? "";
+      for (const a of list) addUrgent(a, name);
+    }
+    for (const a of this.orphans) addUrgent(a, a.space_name ?? "");
+    this.urgent.sort((x, y) => stateRank(y.agent.status) - stateRank(x.agent.status));
     setAgentOrder([...sp.flatMap(s => this.bySpace.get(s.id) ?? []), ...this.orphans].map(a => a.address));
     const list = this.grouped(t, collapsed);
     // Bring the active space into view when it, or its place in the list, changes; a row already in view stays put.
@@ -941,13 +1018,15 @@ export default class Spaces extends View {
           this.cancelRename(cx);
         }
       })
-      .child(h_flex().h(31).pl(16).pr(10).items_center().justify_between().text_size(11.5).text_color(t.dim)
+      .child(h_flex().h(31).pl(16).pr(10).items_center().justify_between().text_size(11.5).text_color(t.muted)
         .when(collapsed, el => el.pl(0).pr(0).gap(3).justify_center())
         .when(!collapsed, el => el.child("Spaces"))
         .when(collapsed, el => el.child(div().id("sidebar-expand").size(26).flex_none().flex().items_center().justify_center().rounded(6)
-          .text_size(13).text_color(t.dim).hover(s => s.bg(t.hover).text_color(t.foreground))
+          .role("button").accessibility_label("Expand sidebar")
+          .text_size(13).text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
           .on_click(toggleSidebar).child("»")))
         .child(div().id("space-new").size(26).flex_none().flex().items_center().justify_center().rounded(6).hover(s => s.bg(t.hover).text_color(t.foreground))
+          .role("button").accessibility_label("New space")
           .on_click(() => run("space.new")).child(svg("mods/workspace-chrome/plus.svg").size(14))))
       .child(v_flex().flex_1().min_h(0).px(collapsed ? 0 : 8).pb(14).overflow_y_scrollbar().mode("always").track_scroll(this.scroll)
         // A block above (another mod's) growing, or the window resizing, shrinks this list and can push the active space out.

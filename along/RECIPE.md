@@ -35,7 +35,8 @@ button, and Float controls and click-to-rename names in pane headers.
   10px radius around the float bar and terminal.
 - **The Files panel.** A rounded 10px card on the theme background with a 1px
   border and 13px text. Header 42px: "Files" in semibold and the shown
-  folder's name right-aligned in dim 12px. Rows are 28px, indented 18px per
+  folder's name — or, while a file is open, that file's path — right-aligned in
+  muted 12px. Rows are 28px, indented 18px per
   depth: a 12px chevron for a folder (12px of blank for a file), a 14px
   folder or file icon, the name, and, when git reports one, a status letter —
   `A` green, `D` and `U` red, `M` in the blocked color.
@@ -43,12 +44,14 @@ button, and Float controls and click-to-rename names in pane headers.
   a bordered "N files" chip in 10px, then the total additions in green and
   deletions in red, both 11px. The changed-file list is at most 200px tall
   with 28px rows: the status letter in a 14px column, the directory prefix in
-  dim text, the file name, and that file's own `+`/`−` counts. Below it the
+  muted text, the file name, and that file's own `+`/`−` counts. Below it the
   selected file's unified diff, 11px monospace on 20px rows, with a vertical
   scrollbar and horizontal scrolling; diff lines are never wrapped.
 - **The commit bar.** At the bottom of Changes, a 32px rounded message input
-  and a 32px "Commit" button. The button is filled with the theme's solid
-  color only when the message is non-empty and no other git work is running.
+  and a 32px "Commit" button, which reads "Commit 3 files" when the panel
+  lists more than one. The button is filled with the theme's solid color
+  only when the message is non-empty, the panel lists at least one changed
+  file, and no other git work is running.
 - **The pane right-click menu.** 280×260, popover color, 12.8px text, 31px
   rows with a 14px icon and the key hint on the right: Split right, Split
   down, Zoom (Unzoom when the pane is zoomed), Send right-clicks to pane,
@@ -60,11 +63,12 @@ button, and Float controls and click-to-rename names in pane headers.
   value is empty or repeats an earlier row is dropped, so the menu can show
   fewer than three.
 - **The Machines dialog.** 460×380, popover color, 12px padding, 13px text. A
-  heading row "Machines" with "enable / disable" in dim 11px and a "+ Add
+  heading row "Machines" with "enable / disable" in muted 11px and a "+ Add
   machine" button that opens the machine-add dialog, then one 36px
-  row per machine: a 7px dot (green when enabled, dim when disabled), the
-  machine name, a second line with its state or "disabled" in dim 11px, and a
-  "Disable" or "Enable" button in 11px.
+  row per machine: a 7px dot (green when enabled, muted when disabled), the
+  machine name, a second line with its state — underscores read as spaces, so
+  `needs_login` shows as `needs login`, the same as the sidebar's machine row —
+  or "disabled", in muted 11px, and a "Disable" or "Enable" button in 11px.
 
 ## How it behaves
 
@@ -105,19 +109,79 @@ button, and Float controls and click-to-rename names in pane headers.
 - Each space's row is followed by its agents: the program icon (it folds the
   agent's sub-agent tree when clicked), the agent's name (its own title, else
   the tab's), the machine name when remote, and a small state mark — a
-  spinner while working, a red `!` when blocked, a dot when done, a dot when
-  the agent errored, an open ring when idle. An agent program that reports no
-  status (no OSC 7501) gets a plain dim mark: it is running, only its state is
+  spinner while working, a `!` in the blocked colour when blocked, a dot
+  when done, a dot when the agent errored, an open ring when idle. An agent program that reports no
+  status (no OSC 7501) gets a plain grey mark: it is running, only its state is
   unknown.
   Clicking a row focuses the agent's pane; clicking an icon
   of a sub-agent without a pane peeks at it.
-- **State colours.** Every mark and every name uses one fixed palette rather
-  than the theme's keys, so a state reads the same in light and dark: working
-  `#4ade80`, done `#3fae6a`, blocked `#e3814f`, error `#e5484d`, idle
-  `#8f8f8f`. The pane header's name, the agent row's name and the float bar's
-  name all take their state's colour, and focusing a row does not replace it:
-  focus is the row's background only. The same palette is copied into
-  `along-pane`, `along-spaces` and `along-float` (each mod loads on its own).
+- **State colours.** Every mark and every name takes its colour from one
+  traffic-light palette: working `#4ade80`, done `#3fae6a`, blocked
+  `#e3814f`, error `#ff5f66`, idle `#9b9b9b`. The pane header's name, the
+  agent row's name and the float bar's name all take their state's colour,
+  and focusing a row does not replace it: focus is the row's background only.
+  On a light surface the same hues come as dark ink — working `#146b30`, done
+  `#2a7a2e`, blocked `#855700`, error `#c62a2a`, idle `#636a74` — because
+  the bright hues sit at 1.7 to 2.8:1 on white; the background's own
+  brightness picks the set. The same helper is copied into `along-pane`,
+  `along-spaces` and `along-float` (each mod loads on its own).
+  The numbers are picked by contrast, not by eye: an agent's name *is* written
+  in its state colour, so every hue has to clear AA's 4.5:1 on the surfaces it
+  lands on. The dark set clears 4.5:1 on the panel background (6.4 to 10.8:1),
+  on a raised row and on the selected row. The light set clears it on the
+  panel background and on a raised row (4.7 to 6.1:1); on the selected row
+  the deeper greens and greys sit at 4.0 to 4.2:1, which is the one place
+  the light palette still falls short.
+- **Key text is muted, never dim.** Text that carries meaning — a section
+  heading, a label, a count, a machine name, a folder path, a diff's line
+  numbers — uses the theme's `muted` colour: 4.8:1 to 6.6:1 on the surfaces
+  it lands on, so it clears AA. `dim` (2.6:1 to 3.5:1) is kept only for what
+  is genuinely inert: a disabled button's label, and the editor's syntax
+  colours, which come from the theme's own highlighter.
+- **Icon-only controls are named.** A control with no text of its own — the
+  pane header's Float, Split right, Split down, Zoom/Unzoom, Close and `⋯`,
+  the float bar's drop icon, four arrows and `✕`, the brand row's Settings,
+  Search, `⋯` and sidebar toggle, the tab bar's `+` and window buttons and a
+  tab's `✕`, the Files panel's `←`, the sidebar's New space, Expand sidebar and
+  fold arrows, a machine's `⚠` and `+` — carries `role("button")` and an
+  `accessibility_label`; a tooltip is not a substitute. The local `button()`
+  helper in each mod takes what is drawn and what is announced as two
+  arguments, so the two never get confused. A space's "needs you" badge is
+  announced as "2 need you", not "2". A selected space or agent row is
+  `role("list_box_option")` with `aria_selected`, and the list's container
+  stays a plain `v_flex` because there is no arrow-key path inside it yet — the
+  app's `agent.next`/`agent.prev` follow the list through `setAgentOrder`. The
+  pane header's five buttons are built only while the header is hovered, so a
+  screen reader finds them only then. A machine's group row is the one
+  exception: expanded it reads its machine name, collapsed it draws only an
+  icon, and one label cannot serve both forms.
+- **User-facing text is English; Chinese is comments only.** Every string a
+  person can read — a label, a tooltip, a notice — is English, so the window
+  reads as one language; Chinese in the source explains why the code does what
+  it does and never reaches the screen.
+- **Needs you.** Agents that reported `blocked` or `error` also gather
+  at the top of the list, above the spaces, under a "Needs you" heading with
+  their number: one row each, named by its space and its own name, so an
+  agent waiting in another space shows up without opening that space. The
+  space that holds them carries the same number as a badge on its row, in
+  the blocked colour, with the tooltip "2 need you". The list under each
+  space is unchanged — the agent still sits where it belongs, so the
+  heading is a summary over the tree, not a move out of it. The collapsed
+  rail shows neither.
+- **A space's own colour.** A space's avatar is a rounded tile with the
+  space's first letter in dark ink (`#15181d`) on one strong colour per hue:
+  `ansi6` `#22a99a`, `ansi3` `#c08a2e`, `ansi4` `#5b8def`, `ansi5`
+  `#8b7cf6`, `ansi2` `#6f9e2f`, `ansi1` `#d9649a`. These are the
+  space's identity, not the theme's: they are the same on every theme and
+  they do not follow the skin. A space stores colour *names* (`ansi3`), so
+  a name the theme does not know falls back to the theme's own ansi colour.
+  They deliberately never reuse a state colour: an orange avatar, an orange
+  "needs you" badge and an orange blocked agent all sit on one space row,
+  and one colour for all three says nothing — `ansi3` and `ansi2` used to
+  be exactly the blocked and done colours, and are now ochre and olive, the
+  nearest state colour 49 and 78 away in RGB. The letter is dark ink because
+  the tile is a background: white on these hues is 2.8:1, the ink 5.3 to
+  6.1:1.
 - **Tree lines.** A 1px `border` line drops from the space row's icon centre
   through a 4px gap and down the left of its agent rows, with a short
   horizontal stub into each row's icon; the last row ends it. The gap keeps
@@ -141,7 +205,8 @@ button, and Float controls and click-to-rename names in pane headers.
 - Agents sort pinned-first, then urgent-first (blocked, done, working, idle),
   the most recent change breaking ties. Agents of no listed space (a machine
   away, or a space that closed under them) gather at the end under
-  "Elsewhere", each named by its space. The collapsed rail shows spaces
+  "Elsewhere", each named by its space. Agents waiting for you are also
+  gathered at the top, under "Needs you". The collapsed rail shows spaces
   only, as before. The standalone agents list is gone: the layout no longer
   mounts `along-agents`, and the priority/grouped sort menu went with it.
 
@@ -249,10 +314,19 @@ button, and Float controls and click-to-rename names in pane headers.
 
 ## Watch out
 
-- **The Changes panel writes to your repository.** Its Commit button runs
-  `git add -A` and then `git commit -m <message>` in the repository root, so
-  it stages everything, not only the rows you looked at. Drop the commit bar
-  if you don't want that.
+- **The Changes panel writes to your repository.** Its Commit button stages
+  the paths the panel lists (`git add -- <paths>`, a hundred at a time) and
+  then runs `git commit -m <message>` in the repository root, so the commit
+  carries the changes the panel showed, not every change in the worktree. It
+  still carries the whole panel, not the one row you were reading, and
+  anything you had staged yourself goes in with it. Drop the commit bar if
+  you don't want that.
+- **`dim` still sits on three things that are read**, against the rule above:
+  the tab bar's icon buttons (`+`, the window buttons, a tab's `✕`), the pane
+  menu's key hints, and the float bar's mark for an agent that reports no
+  status. At 2.6:1 to 3.5:1 they are under AA for text and at the edge of
+  3:1 for a control. The rest of `dim` — a disabled button's label and the
+  editor's syntax colours — is inert, which is what it is for.
 - The Machines dialog runs `hc` and can remove machines from herdr-core. A
   disabled machine's spaces disappear from the window until it is enabled
   again; its terminals keep running in the core.

@@ -12,16 +12,31 @@ import { agents, terminals, panes, spaces, focused, run, theme, props, closeOver
 const SPIN = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const WORDS = { working: "working", blocked: "needs you", done: "finished", idle: "idle" };
 
-// 状态色与 along-spaces/along-pane 一致：报错红、需要人橙、完成绿、空闲灰。
-// 浮动条的名字和标记都用它，跟左侧列表里同一 pane 的颜色对上。
+// 状态色与 along-spaces/along-pane 一致：都是红绿灯三色。浮动条的名字和标记都用它，
+// 跟左侧列表里同一 pane 的颜色对上。
+// 深色主题用饱和原色；浅色主题（白底）用同色相的深墨——亮色在白底上只有 1.7:1。
 const STATE = {
-  error: "#e5484d",
-  blocked: "#e3814f",
-  done: "#3fae6a",
-  idle: "#8f8f8f",
-  working: "#4ade80",
+  dark:  { working: "#4ade80", blocked: "#e3814f", done: "#3fae6a", idle: "#9b9b9b", error: "#ff5f66" },
+  light: { working: "#146b30", blocked: "#855700", done: "#2a7a2e", idle: "#636a74", error: "#c62a2a" },
 };
-const stateColor = (status) => STATE[status] ?? STATE.idle;
+
+// 背景亮不亮决定用哪一套色。
+const onLight = (hex) => {
+  const h = (hex ?? "").replace("#", "").slice(0, 6);
+  if (h.length < 6) return false;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return (r + g + b) / 3 > 140;
+};
+
+let lastBg = null;
+let lastState = STATE.dark;
+const stateColor = (t, status) => {
+  if (t.background !== lastBg) {
+    lastBg = t.background;
+    lastState = onLight(t.background) ? STATE.light : STATE.dark;
+  }
+  return lastState[status] ?? lastState.idle;
+};
 
 // A name given to the pane or its agent row (along.names), so the float bar
 // reads the same as both.
@@ -64,8 +79,9 @@ export default class Float extends View {
     return true;
   }
 
-  // 图标按钮：iconName 为 mods/along-float/ 下的 svg 名
-  button(t, id, label, onClick, iconName, disabled = false) {
+  // 图标按钮：iconName 为 mods/along-float/ 下的 svg 名。label 是画出来的字
+  // （方向键就是「←」这种没有含义的符号），name 才是读屏软件念的名字。
+  button(t, id, label, name, onClick, iconName, disabled = false) {
     const el = h_flex()
       .id(id)
       .px(8)
@@ -73,6 +89,8 @@ export default class Float extends View {
       .gap(5)
       .items_center()
       .rounded(5)
+      .role("button")
+      .accessibility_label(name)
       .text_color(disabled ? t.dim : t.muted)
       .opacity(disabled ? 0.45 : 1)
       .cursor_pointer()
@@ -244,7 +262,7 @@ export default class Float extends View {
         this.done(terminal, overlay);
       } catch (e) {
         // 失败不清窗（还能重试），报告原因，并解锁按钮。
-        notify({ title: "浮窗回落失败", body: String(e?.message ?? e) });
+        notify({ title: "Could not return the float", body: String(e?.message ?? e) });
       } finally {
         this.backing = false;
       }
@@ -310,17 +328,17 @@ export default class Float extends View {
       .border_b(1)
       .border_color(t.border)
       .text_size(12)
-      .child(div().w(12).flex_none().text_color(st ? stateColor(st) : t.dim).when(st === "working", (el) => el.frames(SPIN, 90)).child(glyph))
+      .child(div().w(12).flex_none().text_color(st ? stateColor(t, st) : t.dim).when(st === "working", (el) => el.frames(SPIN, 90)).child(glyph))
       .when(Boolean(pic), (el) => el.child(pic))
-      .child(div().truncate().font_semibold().text_color(st ? stateColor(st) : t.foreground).child(customName(terminal) || k?.name || k?.template || k?.program?.name || terminal || ""))
-      .when(Boolean(st), (el) => el.child(div().flex_none().text_color(stateColor(st)).child(WORDS[st] ?? st)))
+      .child(div().truncate().font_semibold().text_color(st ? stateColor(t, st) : t.foreground).child(customName(terminal) || k?.name || k?.template || k?.program?.name || terminal || ""))
+      .when(Boolean(st), (el) => el.child(div().flex_none().text_color(stateColor(t, st)).child(WORDS[st] ?? st)))
       .child(div().flex_1())
-      .child(this.button(t, "drop", "", (_e, cx) => this.back(cx), "back", pending)
-        .tooltip(pending ? "正在准备悬浮 pane" : "落回当前聚焦 pane；找不到目标时使用来源 pane兜底"))
-      .child(this.button(t, "back-left", "←", (_e, cx) => this.back(cx, "left"), null, pending).tooltip("落到目标 pane 左侧；无目标时兜底"))
-      .child(this.button(t, "back-right", "→", (_e, cx) => this.back(cx, "right"), null, pending).tooltip("落到目标 pane 右侧；无目标时兜底"))
-      .child(this.button(t, "back-up", "↑", (_e, cx) => this.back(cx, "up"), null, pending).tooltip("落到目标 pane 上方；无目标时兜底"))
-      .child(this.button(t, "back-down", "↓", (_e, cx) => this.back(cx, "down"), null, pending).tooltip("落到目标 pane 下方；无目标时兜底"))
-      .child(this.button(t, "close", "✕", () => this.dismiss(terminal, overlay)));
+      .child(this.button(t, "drop", "", "Return to the focused pane", (_e, cx) => this.back(cx), "back", pending)
+        .tooltip(pending ? "Preparing the float" : "Return to the focused pane, or the source pane if there is none"))
+      .child(this.button(t, "back-left", "←", "Return to the left of the focused pane", (_e, cx) => this.back(cx, "left"), null, pending).tooltip("Return to the left of the target pane; the source pane if there is none"))
+      .child(this.button(t, "back-right", "→", "Return to the right of the focused pane", (_e, cx) => this.back(cx, "right"), null, pending).tooltip("Return to the right of the target pane; the source pane if there is none"))
+      .child(this.button(t, "back-up", "↑", "Return above the focused pane", (_e, cx) => this.back(cx, "up"), null, pending).tooltip("Return above the target pane; the source pane if there is none"))
+      .child(this.button(t, "back-down", "↓", "Return below the focused pane", (_e, cx) => this.back(cx, "down"), null, pending).tooltip("Return below the target pane; the source pane if there is none"))
+      .child(this.button(t, "close", "✕", "Close the float", () => this.dismiss(terminal, overlay)));
   }
 }

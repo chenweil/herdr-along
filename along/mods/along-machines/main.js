@@ -126,7 +126,7 @@ export default class AlongMachines extends View {
       })
       .child(h_flex().items_center().gap(8)
         .child(div().font_semibold().flex_1().child("Machines"))
-        .child(div().text_color(t.dim).text_size(11).child("enable / disable"))
+        .child(div().text_color(t.muted).text_size(11).child("enable / disable"))
         .child(h_flex().id("along-machines-add").px(8).py(3).rounded(5).gap(4).items_center().text_size(11).text_color(t.ansi2)
           .cursor_pointer().hover(s => s.bg(t.hover)).on_click(() => openOverlay({ mod: "machine-add", kind: "dialog", width: 560 }))
           .child("+ Add machine")))
@@ -134,16 +134,17 @@ export default class AlongMachines extends View {
         const busy = this.busy.has(machine.name);
         return h_flex().id(`along-machine-${machine.name}`).h(36).flex_none().px(9).gap(8).items_center().rounded(7)
           .when(i === this.at, el => el.bg(t.selected)).hover(s => s.bg(t.hover))
-          .child(div().w(7).h(7).rounded(4).flex_none().bg(machine.enabled ? t.ansi2 : t.dim))
+          .child(div().w(7).h(7).rounded(4).flex_none().bg(machine.enabled ? t.ansi2 : t.muted))
           .child(v_flex().flex_1().min_w(0)
             .child(div().truncate().child(machine.name))
-            .child(div().text_size(11).text_color(t.dim).truncate().child(machine.enabled ? (machine.state ?? "registered") : "disabled")))
+            // 和侧栏同一套写法：needs_login 读作 "needs login"，不把下划线漏到界面上。
+            .child(div().text_size(11).text_color(t.muted).truncate().child(machine.enabled ? (machine.state ?? "registered").replace(/_/g, " ") : "disabled")))
           .child(div().px(8).py(4).rounded(5).text_size(11).text_color(machine.enabled ? t.ansi1 : t.ansi2)
             .when(!busy, el => el.cursor_pointer())
             .on_click((_e, cx) => this.toggle(machine, cx))
             .child(busy ? "Working…" : machine.enabled ? "Disable" : "Enable"));
       })))
-      .when(!list.length && !this.error, el => el.child(div().p(8).text_color(t.dim).child("No saved machines")))
+      .when(!list.length && !this.error, el => el.child(div().p(8).text_color(t.muted).child("No saved machines")))
       .when(Boolean(this.error), el => el.child(div().text_size(11).text_color(t.ansi1).child(this.error)));
   }
 }

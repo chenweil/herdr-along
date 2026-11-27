@@ -15,16 +15,30 @@ import { panes, props, run, openOverlay, closeOverlay, theme, home, layout, spac
 // app 画在 pane 顶边中央的拖拽把手（grip），窄 pane 里点不到按钮。
 const NARROW = 320;
 
-// 状态色与 along-spaces 一致：报错红、需要人橙、完成绿、空闲灰、工作中蓝。
-// 名字的颜色跟着状态变，一眼能看出哪个 pane 在等你。
+// 状态色与 along-spaces 一致：都是红绿灯三色。名字的颜色跟着状态变，一眼能看出哪个 pane 在等你。
+// 深色主题用饱和原色；浅色主题（白底）用同色相的深墨——亮色在白底上只有 1.7:1。
 const STATE = {
-  error: "#e5484d",
-  blocked: "#e3814f",
-  done: "#3fae6a",
-  idle: "#8f8f8f",
-  working: "#4ade80",
+  dark:  { working: "#4ade80", blocked: "#e3814f", done: "#3fae6a", idle: "#9b9b9b", error: "#ff5f66" },
+  light: { working: "#146b30", blocked: "#855700", done: "#2a7a2e", idle: "#636a74", error: "#c62a2a" },
 };
-const stateColor = (status) => STATE[status] ?? STATE.idle;
+
+// 背景亮不亮决定用哪一套色。
+const onLight = (hex) => {
+  const h = (hex ?? "").replace("#", "").slice(0, 6);
+  if (h.length < 6) return false;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return (r + g + b) / 3 > 140;
+};
+
+let lastBg = null;
+let lastState = STATE.dark;
+const stateColor = (t, status) => {
+  if (t.background !== lastBg) {
+    lastBg = t.background;
+    lastState = onLight(t.background) ? STATE.light : STATE.dark;
+  }
+  return lastState[status] ?? lastState.idle;
+};
 
 // Along keeps its own names for panes and agents: the core has no name for a
 // pane, so the name lives in shared state, where every mod sees it. The key
@@ -123,12 +137,15 @@ export default class Pane extends View {
     if (p) run("pane.focus", { pane: p.pane });
   }
 
-  button(t, id, icon, onClick) {
+  // 图标按钮没有文字，读屏软件念不出任何东西：role 加 label 才是它唯一的名字。
+  button(t, id, icon, label, onClick) {
     return div()
       .id(id)
       .p(3)
       .rounded(4)
-      .text_color(t.dim)
+      .role("button")
+      .accessibility_label(label)
+      .text_color(t.muted)
       .hover((s) => s.bg(t.hover).text_color(t.foreground))
       .on_click((_e, cx) => {
         cx.stop_propagation();
@@ -143,7 +160,9 @@ export default class Pane extends View {
       .id(`ph-m-${pane}`)
       .p(3)
       .rounded(4)
-      .text_color(t.dim)
+      .role("button")
+      .accessibility_label("More pane actions")
+      .text_color(t.muted)
       .hover((s) => s.bg(t.hover).text_color(t.foreground))
       .child(svg("mods/along-pane/more.svg").size(14));
     return Popover.new(`ph-pop-${pane}`)
@@ -277,10 +296,10 @@ export default class Pane extends View {
     if (!p) return div();
     const key = nameKey(p);
     const name = customName(key) || paneName(p);
-    const pic = icon(p.program, 14, t.dim);
+    const pic = icon(p.program, 14, t.muted);
     const st = p.status;
     // 有状态就用状态色，没有（普通程序）就保持原色。
-    const nameTone = st ? stateColor(st) : t.foreground;
+    const nameTone = st ? stateColor(t, st) : t.foreground;
     const pane = p.pane;
     const bottom = paneFrame(layout())?.header?.position === "bottom";
     return h_flex()
@@ -348,17 +367,17 @@ export default class Pane extends View {
           this.beginName(p, cx);
         })
         .child(name)))
-      .child(div().flex_1().truncate().text_color(t.dim).child(folder(p.cwd)))
-      .when(st === "working", el => el.child(svg("mods/workspace-chrome/spinner.svg").size(12).flex_none().text_color(stateColor("working")).spin(900)))
-      .when(st === "blocked", el => el.child(div().flex_none().px(6).h(18).flex().items_center().rounded(5).bg(stateColor("blocked") + "26").text_size(10.5).font_semibold().text_color(stateColor("blocked")).child("Needs you")))
-      .when(st === "done", el => el.child(div().size(7).flex_none().rounded(4).bg(stateColor("done"))))
+      .child(div().flex_1().truncate().text_color(t.muted).child(folder(p.cwd)))
+      .when(st === "working", el => el.child(svg("mods/workspace-chrome/spinner.svg").size(12).flex_none().text_color(stateColor(t, "working")).spin(900)))
+      .when(st === "blocked", el => el.child(div().flex_none().px(6).h(18).flex().items_center().rounded(5).bg(stateColor(t, "blocked") + "26").text_size(10.5).font_semibold().text_color(stateColor(t, "blocked")).child("Needs you")))
+      .when(st === "done", el => el.child(div().size(7).flex_none().rounded(4).bg(stateColor(t, "done"))))
       .when(this.hovered || this.menu, el => el
         .when(this.narrow(), el2 => el2.child(this.more(t, pane, p)))
         .when(!this.narrow(), el2 => el2
-          .when(Boolean(p.terminal), el3 => el3.child(this.button(t, `ph-f-${pane}`, "float", (cx) => this.float(p, cx))))
-          .child(this.button(t, `ph-r-${pane}`, "split-right", () => run("pane.split", { direction: "right", pane })))
-          .child(this.button(t, `ph-d-${pane}`, "split-down", () => run("pane.split", { direction: "down", pane })))
-          .child(this.button(t, `ph-z-${pane}`, p.zoomed ? "unzoom" : "zoom", () => run("pane.zoom", { pane })))
-          .child(this.button(t, `ph-x-${pane}`, "close", () => run("pane.close", { pane })))));
+          .when(Boolean(p.terminal), el3 => el3.child(this.button(t, `ph-f-${pane}`, "float", "Float pane", (cx) => this.float(p, cx))))
+          .child(this.button(t, `ph-r-${pane}`, "split-right", "Split right", () => run("pane.split", { direction: "right", pane })))
+          .child(this.button(t, `ph-d-${pane}`, "split-down", "Split down", () => run("pane.split", { direction: "down", pane })))
+          .child(this.button(t, `ph-z-${pane}`, p.zoomed ? "unzoom" : "zoom", p.zoomed ? "Unzoom pane" : "Zoom pane", () => run("pane.zoom", { pane })))
+          .child(this.button(t, `ph-x-${pane}`, "close", "Close pane", () => run("pane.close", { pane })))));
   }
 }
